@@ -1,0 +1,11 @@
+2023-11-24 21:42:53,436 video source:mPLUG-Owl2/data/virtual_car/videos
+2023-11-24 21:42:53,436 splitted image:mPLUG-Owl2/data/virtual_car/images
+2023-11-24 21:43:29,673 split complete
+2023-11-24 21:43:29,673 generated question path:mPLUG-Owl2/data/virtual_car/mmbench_type/mmbench.json
+2023-11-24 21:43:29,686 generation of hint and question complete
+2023-11-24 21:43:29,687 Added key: store_based_barrier_key:1 to store for rank: 0
+2023-11-24 21:43:29,687 Rank 0: Completed store-based barrier for key:store_based_barrier_key:1 with 1 nodes.
+2023-11-24 21:46:46,624 inference complete
+2023-11-24 21:46:46,624 output without merge path:mPLUG-Owl2/data/virtual_car/mmbench_type/mmbench.json
+2023-11-24 21:46:46,624 output merged path:mPLUG-Owl2/data/virtual_car/output_merged/submit.json
+2023-11-24 21:46:46,631 merge output complete

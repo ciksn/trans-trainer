@@ -15,25 +15,19 @@
 #    limitations under the License.
 
 import os
-import copy
 from dataclasses import dataclass, field
-import json
-import logging
-import pathlib
 from typing import Dict, Optional, Sequence, List
 
 import torch
-
+import json
+import logging
 import transformers
-from transformers.models.clip.image_processing_clip import CLIPImageProcessor
 
-from torch.utils.data import Dataset
+from ..constants import LOGDIR
 from ..train.custom_model_trainner import custom_trainer
-from ..constants import IGNORE_INDEX, IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN
 from ..dataset.custom_datasets import DATASET_REGISTRY,COLLATE_REGISTRY
-
-from PIL import Image
-from icecream import ic
+from ..model.custom_model import custom_model
+from ..model.configuration_custom_model import custom_model_config
 
 local_rank = None
 
@@ -41,13 +35,77 @@ def rank0_print(*args):
     if local_rank == 0:
         print(*args)
 
+def maybe_zero_3(param, ignore_status=False, name=None):
+    from deepspeed import zero
+    from deepspeed.runtime.zero.partition_parameters import ZeroParamStatus
+    if hasattr(param, "ds_id"):
+        if param.ds_status == ZeroParamStatus.NOT_AVAILABLE:
+            if not ignore_status:
+                logging.warning(f"{name}: param.ds_status != ZeroParamStatus.NOT_AVAILABLE: {param.ds_status}")
+        with zero.GatheredParameters([param]):
+            param = param.data.detach().cpu().clone()
+    else:
+        param = param.detach().cpu().clone()
+    return param
+
+def get_peft_state_maybe_zero_3(named_params, bias):
+    if bias == "none":
+        to_return = {k: t for k, t in named_params if "lora_" in k}
+    elif bias == "all":
+        to_return = {k: t for k, t in named_params if "lora_" in k or "bias" in k}
+    elif bias == "lora_only":
+        to_return = {}
+        maybe_lora_bias = {}
+        lora_bias_names = set()
+        for k, t in named_params:
+            if "lora_" in k:
+                to_return[k] = t
+                bias_name = k.split("lora_")[0] + "bias"
+                lora_bias_names.add(bias_name)
+            elif "bias" in k:
+                maybe_lora_bias[k] = t
+        for k, t in maybe_lora_bias:
+            if bias_name in lora_bias_names:
+                to_return[bias_name] = t
+    else:
+        raise NotImplementedError
+    to_return = {k: maybe_zero_3(v, ignore_status=True) for k, v in to_return.items()}
+    return to_return
+
+
+def get_peft_state_non_lora_maybe_zero_3(named_params, require_grad_only=True):
+    to_return = {k: t for k, t in named_params if "lora_" not in k}
+    if require_grad_only:
+        to_return = {k: t for k, t in to_return.items() if t.requires_grad}
+    to_return = {k: maybe_zero_3(v, ignore_status=True).cpu() for k, v in to_return.items()}
+    return to_return
+
+def safe_save_model_for_hf_trainer(trainer: transformers.Trainer,
+                                   output_dir: str):
+    """Collects the state dict and dump to disk."""
+
+    if trainer.deepspeed:
+        torch.cuda.synchronize()
+        trainer.save_model(output_dir)
+        return
+
+    state_dict = trainer.model.state_dict()
+    if trainer.args.should_save:
+        cpu_state_dict = {
+            key: value.cpu()
+            for key, value in state_dict.items()
+        }
+        del state_dict
+        trainer._save(output_dir, state_dict=cpu_state_dict)  # noqa
 
 @dataclass
 class ModelArguments:
     """
-    Customizable for train/val/test model Arguments
+    Customizable for model Arguments
     """
-    model_name_or_path: Optional[str] = field(default="facebook/opt-125m")
+    model_name_or_path: Optional[str] = field(default="")
+    config_name_or_path: Optional[str] = field(default="")
+    need_tokenizer: Optional[bool] = field(default=False)
     version: Optional[str] = field(default="v0")
     freeze_backbone: bool = field(default=False)
 
@@ -64,20 +122,16 @@ class DataArguments:
 
 @dataclass
 class TrainingArguments(transformers.TrainingArguments):
+    """
+    Customizable for training argument
+    """
+    status: str = field(default="pretrain")
     cache_dir: Optional[str] = field(default=None)
     optim: str = field(default="adamw_torch")
-    remove_unused_columns: bool = field(default=False)
-    
-    tune_visual_abstractor: bool = field(default=True)
-    freeze_vision_model: bool = field(default=True)
 
-    model_max_length: int = field(
-        default=512,
-        metadata={
-            "help":
-            "Maximum sequence length. Sequences will be right padded (and possibly truncated)."
-        },
-    )
+    load_from_config: bool = field(default=False)
+    load_from_pretrained: bool = field(default=False)
+
     double_quant: bool = field(
         default=True,
         metadata={"help": "Compress the quantization statistics through double quantization."}
@@ -90,18 +144,17 @@ class TrainingArguments(transformers.TrainingArguments):
         default=16,
         metadata={"help": "How many bits to use."}
     )
-    lora_enable: bool = False
-    lora_r: int = 64
-    lora_alpha: int = 16
-    lora_dropout: float = 0.05
+    lora_enable: bool = field(default=False)
+    lora_r: int = field(default=64)
+    lora_alpha: int = field(default=16)
+    lora_dropout: float = field(default=0.05)
     lora_weight_path: str = ""
     lora_bias: str = "none"
-    visual_abstractor_lr: Optional[float] = None
-    group_by_modality_length: bool = field(default=False)
 
 def find_all_linear_names(model):
     cls = torch.nn.Linear
     lora_module_names = set()
+    ## TODO modify to custom model's module
     multimodal_keywords = ['vision_model', 'visual_abstractor']
     for name, module in model.named_modules():
         if any(mm_keyword in name for mm_keyword in multimodal_keywords):
@@ -128,7 +181,6 @@ def build_data_module(data_args) -> Dict:
         data_collator = collator
     )
 
-
 def train():
     global local_rank
 
@@ -139,6 +191,7 @@ def train():
     local_rank = training_args.local_rank
     compute_dtype = (torch.float16 if training_args.fp16 else (torch.bfloat16 if training_args.bf16 else torch.float32))
 
+    # This part is prepared for future quantify
     bnb_model_from_pretrained_args = {}
     if training_args.bits in [4, 8]:
         from transformers import BitsAndBytesConfig
@@ -157,13 +210,30 @@ def train():
             )
         ))
 
-    model = MPLUGOwl2LlamaForCausalLM.from_pretrained(
-        model_args.model_name_or_path,
-        cache_dir=training_args.cache_dir,
-        **bnb_model_from_pretrained_args
-    )
-    model.config.use_cache = False
+    if training_args.load_from_config:
+        config = custom_model_config.from_pretrained(model_args.config_name_or_path)
+    else:
+        config = custom_model_config()
 
+    if training_args.load_from_pretrained:
+        model = custom_model.from_pretrained(
+            model_args.model_name_or_path,
+            cache_dir=training_args.cache_dir,
+            **bnb_model_from_pretrained_args
+        )
+    else:
+        model = custom_model(config)
+
+    if model_args.need_tokenizer and training_args.load_from_pretrained:
+        tokenizer = transformers.AutoTokenizer.from_pretrained(
+            model_args.model_name_or_path,
+            cache_dir=training_args.cache_dir,
+            model_max_length=training_args.model_max_length,
+            padding_side="right",
+            use_fast=False,
+        )
+
+    model.requires_grad_(True)
     if model_args.freeze_backbone:
         model.model.requires_grad_(False)
 
@@ -197,56 +267,7 @@ def train():
                 model.to(torch.float16)
         rank0_print("Adding LoRA adapters...")
         model = get_peft_model(model, lora_config)
-
-    tokenizer = transformers.AutoTokenizer.from_pretrained(
-        model_args.model_name_or_path,
-        cache_dir=training_args.cache_dir,
-        model_max_length=training_args.model_max_length,
-        padding_side="right",
-        use_fast=False,
-    )
-
-    
-    tokenizer.pad_token = tokenizer.unk_token
-    if model_args.version in conversation_lib.conv_templates:
-        conversation_lib.default_conversation = conversation_lib.conv_templates[model_args.version]
-    else:
-        conversation_lib.default_conversation = conversation_lib.conv_templates["vicuna_v1"]
-    
-    if not training_args.freeze_vision_model and training_args.bits in [4, 8]:
-        model.get_model().vision_model.to(dtype=compute_dtype, device=training_args.device)
-    else:
-        vision_tower = model.get_model().vision_model
-        vision_tower.to(dtype=torch.bfloat16 if training_args.bf16 else torch.float16, device=training_args.device)
-    
-    if training_args.tune_visual_abstractor and training_args.bits in [4, 8]:
-        model.get_model().visual_abstractor.to(dtype=compute_dtype, device=training_args.device)
-    else:
-        visual_abstractor = model.get_model().visual_abstractor
-        visual_abstractor.to(dtype=torch.bfloat16 if training_args.bf16 else torch.float16, device=training_args.device)
-    
-    data_args.image_processor = CLIPImageProcessor.from_pretrained(model_args.model_name_or_path)
-    data_args.is_multimodal = True
-
-    model.config.image_aspect_ratio = data_args.image_aspect_ratio
-    model.config.image_grid_pinpoints = data_args.image_grid_pinpoints
-    model.config.tune_visual_abstractor = model_args.tune_visual_abstractor = training_args.tune_visual_abstractor
-    ic(training_args.tune_visual_abstractor)
-    model.requires_grad_(True)
-    if training_args.tune_visual_abstractor:
-        # model.requires_grad_(False)
-        for p in model.get_model().visual_abstractor.parameters():
-            p.requires_grad = True
             
-    model.config.freeze_vision_model = training_args.freeze_vision_model
-    ic(training_args.freeze_vision_model)
-    if training_args.freeze_vision_model:
-        for p in model.get_model().vision_model.parameters():
-            p.requires_grad = False
-            
-    model.config.visual_abstractor_lr = training_args.visual_abstractor_lr
-
-
     if training_args.bits in [4, 8]:
         from peft.tuners.lora import LoraLayer
         for name, module in model.named_modules():
@@ -273,6 +294,7 @@ def train():
     #     trainer.train()
     
     # TODO I dont like auto resume << REMOVE IT AND UNCOMMENT THE ABOVE CODE
+    
     trainer.train()
 
     trainer.save_state()

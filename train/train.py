@@ -28,7 +28,7 @@ from ..train.custom_model_trainner import custom_trainer
 from ..dataset.custom_datasets import DATASET_REGISTRY,COLLATE_REGISTRY
 from ..model.custom_model import custom_model
 from ..model.configuration_custom_model import custom_model_config
-
+from ..eval.custom_compute_metric import custom_compute_metric
 
 local_rank = None
 
@@ -287,7 +287,7 @@ def train():
     trainer = custom_trainer(model=model,
                     tokenizer=tokenizer,
                     args=training_args,
-                    compute_metrics=
+                    compute_metrics=custom_compute_metric,
                     **data_module)
 
     # if list(pathlib.Path(training_args.output_dir).glob("checkpoint-*")):

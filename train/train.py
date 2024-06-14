@@ -29,6 +29,7 @@ from ..dataset.custom_datasets import DATASET_REGISTRY,COLLATE_REGISTRY
 from ..model.custom_model import custom_model
 from ..model.configuration_custom_model import custom_model_config
 
+
 local_rank = None
 
 def rank0_print(*args):
@@ -105,9 +106,7 @@ class ModelArguments:
     """
     model_name_or_path: Optional[str] = field(default="")
     config_name_or_path: Optional[str] = field(default="")
-    need_tokenizer: Optional[bool] = field(default=False)
     version: Optional[str] = field(default="v0")
-    freeze_backbone: bool = field(default=False)
 
 @dataclass
 class DataArguments:
@@ -211,9 +210,12 @@ def train():
         ))
 
     if training_args.load_from_config:
-        config = custom_model_config.from_pretrained(model_args.config_name_or_path)
+        config = custom_model_config.from_pretrained(
+            model_args.config_name_or_path,
+            cache_dir=model_args.cache_dir)
     else:
         config = custom_model_config()
+        config.save_pretrained(model_args.config_name_or_path)
 
     if training_args.load_from_pretrained:
         model = custom_model.from_pretrained(
@@ -233,9 +235,8 @@ def train():
             use_fast=False,
         )
 
-    model.requires_grad_(True)
-    if model_args.freeze_backbone:
-        model.model.requires_grad_(False)
+    #TODO if the model need to freeze parameters
+    # Please list here
 
     if training_args.bits in [4, 8]:
         from peft import prepare_model_for_kbit_training
@@ -286,6 +287,7 @@ def train():
     trainer = custom_trainer(model=model,
                     tokenizer=tokenizer,
                     args=training_args,
+                    compute_metrics=
                     **data_module)
 
     # if list(pathlib.Path(training_args.output_dir).glob("checkpoint-*")):

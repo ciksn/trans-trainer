@@ -1,6 +1,7 @@
 #!/bin/bash
 MODEL_LOAD=
 CONFIG_LOAD=
+TOKENIZER_LOAD=
 CACHE_DIR=
 DATA_FILE=
 
@@ -8,12 +9,16 @@ deepspeed train/train.py \
     --deepspeed ./scripts/zero3.json \
     --model_name_or_path $MODEL_LOAD \
     --config_name_or_path $CONFIG_LOAD \
+    --need_tokenizer False \
+    --tokenizer_name_or_path $TOKENIZER_LOAD \
     --cache_dir $CACHE_DIR \
     --version v1 \
     --data_path $DATA_FILE \
     --dataset_name "" \
+    --enable_test True
     --status "pretrain" \
     --optim "adamw_torch" \
+    --load_best_model_at_end True \
     --load_from_config False \
     --load_from_pretrained False \
     --adam_beta1 0.9 \

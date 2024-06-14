@@ -2,6 +2,9 @@ import torch
 from torch.utils.data import Dataset
 from typing import Dict, Optional, Sequence, List
 from fvcore.common.registry import Registry
+
+from icecream import ic
+
 DATASET_REGISTRY = Registry("DATASET")
 COLLATE_REGISTRY = Registry("COLLATE")
 

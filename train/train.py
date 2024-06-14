@@ -30,6 +30,8 @@ from ..model.custom_model import custom_model
 from ..model.configuration_custom_model import custom_model_config
 from ..eval.custom_compute_metric import custom_compute_metric
 
+from icecream import ic
+
 local_rank = None
 
 def rank0_print(*args):
@@ -106,6 +108,8 @@ class ModelArguments:
     """
     model_name_or_path: Optional[str] = field(default="")
     config_name_or_path: Optional[str] = field(default="")
+    need_tokenizer: Optional[bool] = field(default=False)
+    tokenizer_name_or_path: Optional[str] = field("")
     version: Optional[str] = field(default="v0")
 
 @dataclass
@@ -113,20 +117,23 @@ class DataArguments:
     """
     Customizable for train/val/test data Arguments
     """
-
     data_path: str = field(default=None,
                            metadata={"help": "Path to the training data."})
-    dataset_name: str = field(default=None,metadata={"help":"The dataset used for training"})
+    dataset_name: str = field(default=None,metadata={"help":"The dataset used for training, need to be resigtered in dataset"})
+    enable_test: bool = field(default=True)
 
 
 @dataclass
 class TrainingArguments(transformers.TrainingArguments):
     """
-    Customizable for training argument
+    Customizable for training argumentTrainingArguments(
     """
     status: str = field(default="pretrain")
     cache_dir: Optional[str] = field(default=None)
     optim: str = field(default="adamw_torch")
+    load_best_model_at_end: bool = field(default=True,
+                                         metadata={"help": "If specified, make sure the frequency of eval and save should be same"})
+    metric_for_best_model: str = field(default="CIDEr")
 
     load_from_config: bool = field(default=False)
     load_from_pretrained: bool = field(default=False)
@@ -176,7 +183,7 @@ def build_data_module(data_args) -> Dict:
     return dict(
         train_dataset = train_dataset, # TODO if there needs quote
         eval_dataset = eval_dataset,
-        test_dataset = test_dataset,
+        test_dataset = test_dataset if data_args.enable_test else None,
         data_collator = collator
     )
 
@@ -217,6 +224,17 @@ def train():
         config = custom_model_config()
         config.save_pretrained(model_args.config_name_or_path)
 
+    if model_args.need_tokenizer:
+        tokenizer = transformers.AutoTokenizer.from_pretrained(
+            model_args.tokenizer_name_or_path,
+            cache_dir=training_args.cache_dir,
+            model_max_length=training_args.model_max_length,
+            padding_side="right",
+            use_fast=False,
+        )
+    else:
+        tokenizer = None
+
     if training_args.load_from_pretrained:
         model = custom_model.from_pretrained(
             model_args.model_name_or_path,
@@ -224,16 +242,7 @@ def train():
             **bnb_model_from_pretrained_args
         )
     else:
-        model = custom_model(config)
-
-    if model_args.need_tokenizer and training_args.load_from_pretrained:
-        tokenizer = transformers.AutoTokenizer.from_pretrained(
-            model_args.model_name_or_path,
-            cache_dir=training_args.cache_dir,
-            model_max_length=training_args.model_max_length,
-            padding_side="right",
-            use_fast=False,
-        )
+        model = custom_model(config, tokenizer)
 
     #TODO if the model need to freeze parameters
     # Please list here
@@ -300,6 +309,9 @@ def train():
     trainer.train()
 
     trainer.save_state()
+
+    if data_args.enable_test:
+        trainer.predict()
 
     model.config.use_cache = True
 

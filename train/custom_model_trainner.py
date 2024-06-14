@@ -25,6 +25,8 @@ logger = logging.get_logger(__name__)
 # In order to re-write eval_loop
 # and keep as most functions
 
+from icecream import ic
+
 class custom_trainer(Trainer):
     """
     Exisiting Trainer is enough for handling normal tasks.
@@ -39,6 +41,9 @@ class custom_trainer(Trainer):
         """
         return super()._get_train_sampler()
     
+    def create_optimizer(self):
+        return super().create_optimizer()
+
     def evaluation_loop(
         self,
         dataloader: DataLoader,
@@ -248,7 +253,8 @@ class custom_trainer(Trainer):
                     EvalPrediction(predictions=all_preds, label_ids=all_labels, inputs=all_inputs)
                 )
             else:
-                metrics = self.compute_metrics(EvalPrediction(predictions=all_preds, label_ids=all_labels))
+                metrics = self.compute_metrics(EvalPrediction(predictions=all_preds, label_ids=all_labels),self.model.get_tokenizer())
+                 # modified here !! need to match with the customized metric function
         else:
             metrics = {}
 

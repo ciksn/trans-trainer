@@ -1,6 +1,7 @@
 import torch
 from torch.utils.data import Dataset
-from typing import Dict, Optional, Sequence, List
+from transformers.tokenization_utils import PreTrainedTokenizer
+from typing import Dict, Optional, Sequence, List, Any, Union
 from fvcore.common.registry import Registry
 
 from icecream import ic
@@ -13,14 +14,16 @@ class custom_dataset(Dataset):
     """
     requirements:
     1. data_arg
+    2. split dataset
+    3. tokenizer(Optional)
     """
-    def __init__(self,data_arg,split) -> None:
+    def __init__(self,data_arg,split:str ,tokenizer: Optional[PreTrainedTokenizer] = None) -> None:
         super().__init__()
 
-    def __getitem__(self, index):
+    def __getitem__(self, index) -> Dict[str : Union[torch.Tensor, Any]]:
         pass
 
-    def __len__(self):
+    def __len__(self) -> int:
         pass
 
 @COLLATE_REGISTRY.register()

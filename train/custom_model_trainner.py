@@ -168,12 +168,10 @@ class custom_trainer(Trainer):
                 logits = self.accelerator.gather_for_metrics((logits))
                 preds_host = logits if preds_host is None else nested_concat(preds_host, logits, padding_index=-100)
 
-            if labels is not None: # modify here
-                if not isinstance(labels,list):
-                    labels = self.accelerator.gather_for_metrics((labels))
-                    labels_host = labels if labels_host is None else nested_concat(labels_host, labels, padding_index=-100)
-                else:
-                    labels_host = labels if labels_host is None else labels_host + labels
+            if labels is not None:
+                labels = self.accelerator.gather_for_metrics((labels))
+                labels_host = labels if labels_host is None else nested_concat(labels_host, labels, padding_index=-100)
+                    
 
             self.control = self.callback_handler.on_prediction_step(args, self.state, self.control)
 
@@ -193,14 +191,10 @@ class custom_trainer(Trainer):
                         else nested_concat(all_inputs, inputs_decode, padding_index=-100)
                     )
                 if labels_host is not None:
-                    if not isinstance(labels,list):
-                        labels = nested_numpify(labels_host)
-                        all_labels = (
-                            labels if all_labels is None else nested_concat(all_labels, labels, padding_index=-100)
-                        )
-                    else:
-                        labels = labels_host
-                        all_labels = labels if all_labels is None else all_labels + labels
+                    labels = nested_numpify(labels_host)
+                    all_labels = (
+                        labels if all_labels is None else nested_concat(all_labels, labels, padding_index=-100)
+                    )
 
                 # Set back to None to begin a new accumulation
                 losses_host, preds_host, inputs_host, labels_host = None, None, None, None
@@ -222,14 +216,8 @@ class custom_trainer(Trainer):
                 inputs_decode if all_inputs is None else nested_concat(all_inputs, inputs_decode, padding_index=-100)
             )
         if labels_host is not None:
-            if not isinstance(labels,list):
-                labels = nested_numpify(labels_host)
-                all_labels = (
-                    labels if all_labels is None else nested_concat(all_labels, labels, padding_index=-100)
-                )
-            else:
-                labels = labels_host
-                all_labels = labels if all_labels is None else all_labels + labels
+            labels = nested_numpify(labels_host)
+            all_labels = labels if all_labels is None else nested_concat(all_labels, labels, padding_index=-100)
 
         # Number of samples
         if has_length(eval_dataset):
@@ -254,7 +242,7 @@ class custom_trainer(Trainer):
                 )
             else:
                 metrics = self.compute_metrics(EvalPrediction(predictions=all_preds, label_ids=all_labels),self.model.get_tokenizer())
-                 # modified here !! need to match with the customized metric function
+                # modified here !! need to match with the customized metric function
         else:
             metrics = {}
 

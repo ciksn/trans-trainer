@@ -15,7 +15,6 @@ deepspeed train/train.py \
     --version v1 \
     --data_path $DATA_FILE \
     --dataset_name "" \
-    --enable_test True
     --status "pretrain" \
     --optim "adamw_torch" \
     --load_best_model_at_end True \
@@ -43,7 +42,7 @@ deepspeed train/train.py \
     --resume_from_checkpoint None \
     --save_strategy "epoch" \
     --save_steps 1 \
-    --save_total_limit None \
+    --save_total_limit 5 \
     --seed 42 \
     --per_device_train_batch_size 2 \
     --per_device_eval_batch_size 4 \

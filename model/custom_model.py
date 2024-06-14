@@ -29,7 +29,8 @@ class custom_model(PreTrainedModel):
         The output of the main model should be "ModelOutput"
         or dict contains key "loss" / 1st element be loss
         """
-
+        loss = None
+        
         return ModelOutput(
-            
+            loss = loss
         )

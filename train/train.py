@@ -17,6 +17,7 @@
 import os
 from dataclasses import dataclass, field
 from typing import Dict, Optional, Sequence, List
+from transformers.tokenization_utils import PreTrainedTokenizer
 
 import torch
 import json
@@ -120,7 +121,6 @@ class DataArguments:
     data_path: str = field(default=None,
                            metadata={"help": "Path to the training data."})
     dataset_name: str = field(default=None,metadata={"help":"The dataset used for training, need to be resigtered in dataset"})
-    enable_test: bool = field(default=True)
 
 
 @dataclass
@@ -172,18 +172,16 @@ def find_all_linear_names(model):
         lora_module_names.remove('lm_head')
     return list(lora_module_names)
 
-def build_data_module(data_args) -> Dict:
+def build_data_module(data_args,tokenzier:PreTrainedTokenizer = None) -> Dict:
     """
     Get dataset and collator function for training
     """
-    train_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args,"train")
-    eval_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args,"eval")
-    test_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args,"test")
+    train_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args,"train",tokenzier)
+    eval_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args,"eval",tokenzier)
     collator = COLLATE_REGISTRY.get(data_args.dataset_name+"_collate_fn")()
     return dict(
         train_dataset = train_dataset, # TODO if there needs quote
         eval_dataset = eval_dataset,
-        test_dataset = test_dataset if data_args.enable_test else None,
         data_collator = collator
     )
 
@@ -291,7 +289,7 @@ def train():
                     if training_args.bf16 and module.weight.dtype == torch.float32:
                         module = module.to(torch.bfloat16)
 
-    data_module = build_data_module(data_args)
+    data_module = build_data_module(data_args,tokenizer)
 
     trainer = custom_trainer(model=model,
                     tokenizer=tokenizer,
@@ -307,11 +305,7 @@ def train():
     # TODO I dont like auto resume << REMOVE IT AND UNCOMMENT THE ABOVE CODE
     
     trainer.train()
-
     trainer.save_state()
-
-    if data_args.enable_test:
-        trainer.predict()
 
     model.config.use_cache = True
 

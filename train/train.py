@@ -291,6 +291,8 @@ def train():
 
     data_module = build_data_module(data_args,tokenizer)
 
+    custom_compute_metric = custom_compute_metric(tokenizer)
+
     trainer = custom_trainer(model=model,
                     tokenizer=tokenizer,
                     args=training_args,

@@ -1,0 +1,7 @@
+deepspeed==0.14.4
+fvcore==0.1.5.post20221221
+icecream==2.1.3
+numpy==2.0.0
+peft==0.11.1
+torch==2.3.1
+transformers==4.42.3

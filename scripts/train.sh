@@ -1,9 +1,9 @@
 #!/bin/bash
-MODEL_LOAD=
-CONFIG_LOAD=
-TOKENIZER_LOAD=
-CACHE_DIR=
-DATA_FILE=
+MODEL_LOAD=''
+CONFIG_LOAD=''
+TOKENIZER_LOAD=''
+CACHE_DIR=''
+
 
 deepspeed train/train.py \
     --deepspeed ./scripts/zero3.json \

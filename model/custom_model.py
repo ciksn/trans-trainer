@@ -9,14 +9,17 @@ from transformers.modeling_outputs import ModelOutput
 class custom_model(PreTrainedModel):
     """
     Model definition here
-    """
-    def __init__(self, config: PretrainedConfig, tokenizer = None, *inputs, **kwargs):
-        super(custom_model,self).__init__(config, *inputs, **kwargs)
-        self.tokenizer = tokenizer
-        self.post_init()
 
-    def _init_weights(self, module):
-        module.reset_parameters()
+    Input:
+        Contains input data, label
+    Output:
+        Inherit from ModelOutput -> the first element must be loss
+
+    """
+    def __init__(self, config: PretrainedConfig, tokenizer: PreTrainedTokenizer | None = None, *inputs, **kwargs):
+        super(custom_model,self).__init__(config, *inputs, **kwargs)
+        self.config = config
+        self.tokenizer = tokenizer
 
     def get_tokenizer(self,) -> PreTrainedTokenizer:
         return self.tokenizer
@@ -26,10 +29,12 @@ class custom_model(PreTrainedModel):
 
     def forward(self,inputs):
         """
+        The inputs need to be flattened here since (**input) when called
         The output of the main model should be "ModelOutput"
         or dict contains key "loss" / 1st element be loss
         """
         loss = None
+        #when computing loss, remember to distinct single batch when training or batch of list when eval
         
         return ModelOutput(
             loss = loss

@@ -121,7 +121,10 @@ class DataArguments:
     data_path: str = field(default=None,
                            metadata={"help": "Path to the training data."})
     dataset_name: str = field(default=None,metadata={"help":"The dataset used for training, need to be resigtered in dataset"})
-
+    caption_seq_len: str = field(default='',metadata={"help":""})
+    video_seq_len: str = field(default='',metadata={"help":""})
+    caption_file_path: str = field(default='',metadata={"help":""})
+    video_folder_path: str = field(default='',metadata={"help":""})
 
 @dataclass
 class TrainingArguments(transformers.TrainingArguments):
@@ -138,18 +141,18 @@ class TrainingArguments(transformers.TrainingArguments):
     load_from_config: bool = field(default=False)
     load_from_pretrained: bool = field(default=False)
 
-    double_quant: bool = field(
-        default=True,
-        metadata={"help": "Compress the quantization statistics through double quantization."}
-    )
-    quant_type: str = field(
-        default="nf4",
-        metadata={"help": "Quantization data type to use. Should be one of `fp4` or `nf4`."}
-    )
-    bits: int = field(
-        default=16,
-        metadata={"help": "How many bits to use."}
-    )
+    # double_quant: bool = field(
+    #     default=False,
+    #     metadata={"help": "Compress the quantization statistics through double quantization."}
+    # )
+    # quant_type: str = field(
+    #     default="nf4",
+    #     metadata={"help": "Quantization data type to use. Should be one of `fp4` or `nf4`."}
+    # )
+    # bits: int = field(
+    #     default=16,
+    #     metadata={"help": "How many bits to use."}
+    # )
     lora_enable: bool = field(default=False)
     lora_r: int = field(default=64)
     lora_alpha: int = field(default=16)
@@ -176,8 +179,8 @@ def build_data_module(data_args,tokenzier:PreTrainedTokenizer = None) -> Dict:
     """
     Get dataset and collator function for training
     """
-    train_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args,"train",tokenzier)
-    eval_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args,"eval",tokenzier)
+    train_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args, "train", tokenzier)
+    eval_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args, "eval", tokenzier)
     collator = COLLATE_REGISTRY.get(data_args.dataset_name+"_collate_fn")()
     return dict(
         train_dataset = train_dataset, # TODO if there needs quote
@@ -236,6 +239,7 @@ def train():
     if training_args.load_from_pretrained:
         model = custom_model.from_pretrained(
             model_args.model_name_or_path,
+            config=config,
             cache_dir=training_args.cache_dir,
             **bnb_model_from_pretrained_args
         )
@@ -291,12 +295,12 @@ def train():
 
     data_module = build_data_module(data_args,tokenizer)
 
-    custom_compute_metric = custom_compute_metric(tokenizer)
+    compute_metric = custom_compute_metric(tokenizer)
 
     trainer = custom_trainer(model=model,
                     tokenizer=tokenizer,
                     args=training_args,
-                    compute_metrics=custom_compute_metric,
+                    compute_metrics=compute_metric,
                     **data_module)
 
     # if list(pathlib.Path(training_args.output_dir).glob("checkpoint-*")):

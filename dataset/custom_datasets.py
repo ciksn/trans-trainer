@@ -5,7 +5,8 @@ from typing import Dict, Optional, Sequence, List, Any, Union
 from fvcore.common.registry import Registry
 
 from icecream import ic
-from preprocess import *
+from tqdm import tqdm
+from .preprocess import *
 
 DATASET_REGISTRY = Registry("DATASET")
 COLLATE_REGISTRY = Registry("COLLATE")
@@ -17,6 +18,9 @@ class msrvtt_dataset(Dataset):
     1. data_arg
     2. split dataset
     3. tokenizer(Optional)
+
+    Note:
+    1. If the data not used in model input, the column will be removed unless
     """
     def __init__(self,data_args, split:str, tokenizer: Optional[PreTrainedTokenizer] = None) -> None:
         super().__init__()
@@ -33,45 +37,51 @@ class msrvtt_dataset(Dataset):
             vid_name = video_path.split('/')[-1][:-4]
             if vid_name in name_list:
                 self.name2path[vid_name] = video_path
-        
+
         self.item_list = []
+        print("------------------------------")
+        print("Begin Loading and Tokenizing " + split + " Captions")
         if split == "train":
-            for name in name2cap.keys():
+            for name in tqdm(name_list):
                 for caption in name2cap[name]:
                     self.item_list.append((name,
                                            tokenizer(caption,
+                                                     truncation=True,
+                                                     padding='max_length',
                                                      return_tensors='pt')))
         else:
-            for name in name2cap.keys():
-                self.item_list.append(name,
+            for name in tqdm(name_list):
+                self.item_list.append((name,
                                       tokenizer(name2cap[name],
-                                                return_tensors='pt'))
+                                                truncation=True,
+                                                padding='max_length',
+                                                return_tensors='pt')))
 
-    def __getitem__(self, index) -> Dict[str : Union[torch.Tensor, Any]]:
+    def __getitem__(self, index) -> Dict[str, Union[torch.Tensor, Any]]:
         name, t_label = self.item_list[index]
         video_path = self.name2path[name]
         vid_feat = np.load(video_path)
         
         return {
             'vid_feat': vid_feat,
-            'label': t_label
+            'input_ids': t_label['input_ids'],
+            'attention_mask': t_label['attention_mask']
         }
 
     def __len__(self) -> int:
         return len(self.item_list)
 
 @COLLATE_REGISTRY.register()
-class msrvtt_collate_fn(object):
+class msrvtt_dataset_collate_fn(object):
     """
     """
     def __call__(self, instances: Sequence[Dict]) -> Dict[str, torch.Tensor]:
-        labels = [_['label'] for _ in instances]
-        vid_feat = [_['vid_feat'] for _ in instances]
-
-        labels = torch.cat([torch.tensor(item,dtype=torch.uint8).unsqueeze(0)for item in labels],dim=0)
-        vid_feat = torch.cat([torch.tensor(item,dtype=torch.float32).unsqueeze(0)for item in vid_feat],dim=0)
+        input_ids = torch.cat([_['input_ids'] for _ in instances],dim=0)
+        attention_mask = torch.cat([_['attention_mask'] for _ in instances],dim=0)
+        vid_feat = torch.cat([torch.tensor(_['vid_feat'],dtype=torch.float32).unsqueeze(0) for _ in instances],dim=0)
 
         return {
             "vid_feat": vid_feat,
-            "labels": labels
+            "input_ids": input_ids,
+            "attention_mask": attention_mask
         }

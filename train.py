@@ -24,12 +24,12 @@ import json
 import logging
 import transformers
 
-from ..constants import LOGDIR
-from ..train.custom_model_trainner import custom_trainer
-from ..dataset.custom_datasets import DATASET_REGISTRY,COLLATE_REGISTRY
-from ..model.custom_model import custom_model
-from ..model.configuration_custom_model import custom_model_config
-from ..eval.custom_compute_metric import custom_compute_metric
+from constants import LOGDIR
+from train.custom_model_trainner import custom_trainer
+from dataset.custom_datasets import DATASET_REGISTRY,COLLATE_REGISTRY
+from model.custom_model import custom_model
+from model.configuration_custom_model import custom_model_config
+from eval.custom_compute_metric import custom_compute_metric
 
 from icecream import ic
 
@@ -110,7 +110,7 @@ class ModelArguments:
     model_name_or_path: Optional[str] = field(default="")
     config_name_or_path: Optional[str] = field(default="")
     need_tokenizer: Optional[bool] = field(default=False)
-    tokenizer_name_or_path: Optional[str] = field("")
+    tokenizer_name_or_path: Optional[str] = field(default="")
     version: Optional[str] = field(default="v0")
 
 @dataclass
@@ -118,11 +118,9 @@ class DataArguments:
     """
     Customizable for train/val/test data Arguments
     """
-    data_path: str = field(default=None,
-                           metadata={"help": "Path to the training data."})
     dataset_name: str = field(default=None,metadata={"help":"The dataset used for training, need to be resigtered in dataset"})
-    caption_seq_len: str = field(default='',metadata={"help":""})
-    video_seq_len: str = field(default='',metadata={"help":""})
+    caption_seq_len: int = field(default='',metadata={"help":""})
+    video_seq_len: int = field(default='',metadata={"help":""})
     caption_file_path: str = field(default='',metadata={"help":""})
     video_folder_path: str = field(default='',metadata={"help":""})
 
@@ -149,10 +147,10 @@ class TrainingArguments(transformers.TrainingArguments):
     #     default="nf4",
     #     metadata={"help": "Quantization data type to use. Should be one of `fp4` or `nf4`."}
     # )
-    # bits: int = field(
-    #     default=16,
-    #     metadata={"help": "How many bits to use."}
-    # )
+    bits: int = field(
+        default=32,
+        metadata={"help": "How many bits to use."}
+    )
     lora_enable: bool = field(default=False)
     lora_r: int = field(default=64)
     lora_alpha: int = field(default=16)
@@ -229,10 +227,12 @@ def train():
         tokenizer = transformers.AutoTokenizer.from_pretrained(
             model_args.tokenizer_name_or_path,
             cache_dir=training_args.cache_dir,
-            model_max_length=training_args.model_max_length,
+            model_max_length=data_args.caption_seq_len,
             padding_side="right",
             use_fast=False,
         )
+        tokenizer.pad_token = tokenizer.unk_token
+        tokenizer.pad_token_id = tokenizer.unk_token_id
     else:
         tokenizer = None
 

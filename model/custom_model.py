@@ -27,7 +27,7 @@ class custom_model(PreTrainedModel):
     def _prepare_model_inputs(self, inputs: torch.Tensor | None = None, bos_token_id: int | None = None, model_kwargs: torch.Dict[str, torch.Tensor] | None = None) -> Tuple[Tensor, str | None, Dict[str, Tensor]]:
         return super()._prepare_model_inputs(inputs, bos_token_id, model_kwargs)
 
-    def forward(self,inputs):
+    def forward(self,vid_feat,input_ids,attention_mask,):
         """
         The inputs need to be flattened here since (**input) when called
         The output of the main model should be "ModelOutput"

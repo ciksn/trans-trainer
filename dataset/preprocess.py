@@ -31,4 +31,5 @@ def annotation_process(caption_path:str, split:str):
             name2cap[name] = [caption]
         else:
             name2cap[name].append(caption)
+
     return name2cap, train_video_list if split == "train" else val_video_list

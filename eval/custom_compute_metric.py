@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Optional
 from transformers.tokenization_utils import PreTrainedTokenizer
-from ..eval.labels.eval import text_only_language_eval
+from .labels.eval import text_only_language_eval
 
 from icecream import ic
 

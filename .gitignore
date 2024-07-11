@@ -1,2 +1,4 @@
 eval/labels
 test.ipynb
+*__pycache__*
+*events*

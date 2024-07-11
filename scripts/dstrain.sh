@@ -8,7 +8,8 @@ export DATASET_NAME="msrvtt_dataset"
 export CAPTION_FILE_PATH="/home/zeyu/work/deep_learning/row_dataset/video_captioning/msrvtt/train_val_test_annotation/train_val_test_videodatainfo.json"
 export VIDEO_FOLDER_PATH="/home/zeyu/work/deep_learning/extracted_dataset/msrvtt/CLIP-vitL14"
 
-python ../train.py \
+deepspeed ../train.py \
+    --deepspeed /home/zeyu/work/deep_learning/functional_files/trans-trainer/scripts/zero3.json \
     --model_name_or_path $MODEL_LOAD \
     --config_name_or_path $CONFIG_LOAD \
     --need_tokenizer True \
@@ -30,7 +31,7 @@ python ../train.py \
     --adam_epsilon 1e-08 \
     --bf16 True \
     --dataloader_drop_last False \
-    --dataloader_num_workers 0 \
+    --dataloader_num_workers 4 \
     --dataloader_pin_memory True \
     --eval_steps 1 \
     --evaluation_strategy "epoch" \
@@ -49,7 +50,7 @@ python ../train.py \
     --save_steps 1 \
     --save_total_limit 5 \
     --seed 42 \
-    --per_device_train_batch_size 1 \
+    --per_device_train_batch_size 2 \
     --per_device_eval_batch_size 4 \
     --weight_decay 0. \
     --warmup_ratio 0.03

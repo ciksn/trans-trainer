@@ -1,5 +1,6 @@
 from typing import Tuple,Dict
 import torch
+import torch.nn as nn
 from torch import Tensor
 from transformers import PreTrainedModel
 from transformers.tokenization_utils import PreTrainedTokenizer

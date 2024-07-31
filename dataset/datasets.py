@@ -1,4 +1,6 @@
 import torch
+import glob
+import numpy as np
 from torch.utils.data import Dataset
 from transformers.tokenization_utils import PreTrainedTokenizer
 from typing import Dict, Optional, Sequence, List, Any, Union
@@ -6,7 +8,8 @@ from fvcore.common.registry import Registry
 
 from icecream import ic
 from tqdm import tqdm
-from .preprocess import *
+from .msrvtt_preprocess import msrvtt_annotation_process
+from .bddx_preprocess import *
 
 DATASET_REGISTRY = Registry("DATASET")
 COLLATE_REGISTRY = Registry("COLLATE")
@@ -30,7 +33,7 @@ class msrvtt_dataset(Dataset):
         self.video_folder_path = data_args.video_folder_path
         self.caption_file_path = data_args.caption_file_path
         
-        name2cap, name_list = annotation_process(self.caption_file_path,split=split)
+        name2cap, name_list = msrvtt_annotation_process(self.caption_file_path,split=split)
         self.name2path = {}
         videos_path_list = glob.glob(self.video_folder_path + '/*.npy')
         for video_path in videos_path_list:
@@ -75,7 +78,7 @@ class msrvtt_dataset(Dataset):
 class msrvtt_dataset_collate_fn(object):
     """
     """
-    def __call__(self, instances: Sequence[Dict]) -> Dict[str, torch.Tensor]:
+    def __call__(self, instances: Sequence[Dict]) -> Dict[str, torch.Tensor | Any]:
         input_ids = torch.cat([_['input_ids'] for _ in instances],dim=0)
         attention_mask = torch.cat([_['attention_mask'] for _ in instances],dim=0)
         vid_feat = torch.cat([torch.tensor(_['vid_feat'],dtype=torch.float32).unsqueeze(0) for _ in instances],dim=0)

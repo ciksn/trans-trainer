@@ -25,11 +25,11 @@ import logging
 import transformers
 
 from constants import LOGDIR
-from train.custom_model_trainner import custom_trainer
-from dataset.custom_datasets import DATASET_REGISTRY,COLLATE_REGISTRY
-from model.modeling_custom import custom_model
-from model.configuration_custom_model import custom_model_config
-from eval.custom_compute_metric import custom_compute_metric
+from train.model_trainner import custom_trainer
+from dataset.datasets import DATASET_REGISTRY,COLLATE_REGISTRY
+from model.modeling import custom_model
+from model.configuration_model import custom_model_config
+from eval.compute_metric import multireference_text_metric
 
 from icecream import ic
 

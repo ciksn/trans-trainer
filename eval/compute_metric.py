@@ -5,7 +5,7 @@ from .labels.eval import text_only_language_eval
 
 from icecream import ic
 
-class custom_compute_metric:
+class multireference_text_metric:
     def __init__(self,tokenizer: Optional[PreTrainedTokenizer] = None) -> None:
         assert tokenizer is not None
         self.tokenizer = tokenizer

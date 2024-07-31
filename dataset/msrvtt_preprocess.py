@@ -1,12 +1,8 @@
-import torch
 import json
-import torch.utils.data
-import glob
-import numpy as np
 from icecream import ic
-from typing import Tuple
+from typing import Tuple,List,Dict
 
-def annotation_process(caption_path:str, split:str):
+def msrvtt_annotation_process(caption_path:str, split:str) -> Tuple[Dict[str,List[str]],List[str]]:
     """
     return a list of tuple -> (caption,name) / train_video_id_list or val_video_id_list
     """

@@ -295,7 +295,7 @@ def train():
 
     data_module = build_data_module(data_args,tokenizer)
 
-    compute_metric = custom_compute_metric(tokenizer)
+    compute_metric = multireference_text_metric(tokenizer)
 
     trainer = custom_trainer(model=model,
                     tokenizer=tokenizer,

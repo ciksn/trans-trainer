@@ -1,6 +1,8 @@
 import numpy as np
+import decord
 from torchvision import transforms
 from decord import VideoReader, cpu
+decord.bridge.set_bridge("torch")
 
 def get_index(num_frames, num_segments):
     seg_size = float(num_frames - 1) / num_segments

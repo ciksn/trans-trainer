@@ -11,9 +11,9 @@ from transformers.configuration_utils import PretrainedConfig
 from transformers.modeling_outputs import BaseModelOutput
 
 from .modeling_pos import (
-    get_abs_pos, 
-    get_1d_sincos_pos_embed_from_grid, 
-    get_2d_sincos_pos_embed_from_grid, 
+    get_abs_pos,
+    get_1d_sincos_pos_embed_from_grid,
+    get_2d_sincos_pos_embed_from_grid,
     get_2d_sincos_pos_embed
 )
 
@@ -24,7 +24,6 @@ class QuickGELU(nn.Module):
 class MLP(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.config = config
         self.activation_fn = QuickGELU()
         self.fc1 = nn.Linear(config.hidden_size, config.intermediate_size)
         self.fc2 = nn.Linear(config.intermediate_size, config.hidden_size)
@@ -38,7 +37,6 @@ class MLP(nn.Module):
 class VisualMLP(nn.Module):
     def __init__(self, config: PretrainedConfig):
         super().__init__()
-        self.config = config
         hidden_size = config.hidden_size
         self.act = nn.SiLU()
 
@@ -55,7 +53,6 @@ class VisualMLP(nn.Module):
 
 class DownSampleMLP(nn.Module):
     def __init__(self, input_dim, output_dim, config):
-
         self.activation_fn = QuickGELU()
         self.fc1 = nn.Linear(input_dim, config.intermediate_size)
         self.fc2 = nn.Linear(config.intermediate_size, output_dim)
@@ -65,7 +62,8 @@ class DownSampleMLP(nn.Module):
         hidden_states = self.activation_fn(hidden_states)
         hidden_states = self.fc2(hidden_states)
         return hidden_states
-class VisionMultiHeadAttention(nn.Module):
+    
+class MultiHeadAttention(nn.Module):
     def __init__(self, config: PretrainedConfig):
         super().__init__()
         self.config = config
@@ -86,16 +84,15 @@ class VisionMultiHeadAttention(nn.Module):
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
         self.save_attention = False
 
-        grids = config.grid_size
-        self.register_buffer(
-            'q_pos_embed', 
-            torch.from_numpy(get_1d_sincos_pos_embed_from_grid(config.hidden_size, np.arange(config.num_learnable_queries, dtype=np.float32))).float()
-        )
-        self.register_buffer(
-            'k_pos_embed', 
-            torch.from_numpy(get_2d_sincos_pos_embed(config.hidden_size, grids, cls_token=True)).float()
-        )
-        
+        # grids = config.grid_size
+        # self.register_buffer(
+        #     'q_pos_embed', 
+        #     torch.from_numpy(get_1d_sincos_pos_embed_from_grid(config.hidden_size, np.arange(config.num_learnable_queries, dtype=np.float32))).float()
+        # )
+        # self.register_buffer(
+        #     'k_pos_embed', 
+        #     torch.from_numpy(get_2d_sincos_pos_embed(config.hidden_size, grids, cls_token=False)).float()
+        # )
 
     def save_attn_gradients(self, attn_gradients):
         self.attn_gradients = attn_gradients
@@ -124,17 +121,35 @@ class VisionMultiHeadAttention(nn.Module):
         past_key_value=None,
         output_attentions=False,
     ):
+        """
+        Args:
+            hidden_state: Indicate query
+            attention_mask: final attention weights mask
+                range [-inf,0] size [batch_size, q_len, k_len]
+            head_mask: attention head mask to mask several given heads
+                range [0,1](binary) size [batch_size,v_len]
+            encoder_hidden_state: input for key-value
+            encoder_attention_mask: mask encoder input
+            past_key_value: during generation
+            output_attention: bool indicate whether output attention weights 
+        """
         # If this is instantiated as a cross-attention module, the keys
         # and values come from an encoder; the attention mask needs to be
         # such that the encoder's padding tokens are not attended to.
-        
-        qk_pos_embed = torch.cat([self.q_pos_embed, self.k_pos_embed], dim = 0).unsqueeze(0).to(dtype=hidden_states.dtype)
+
+        q_pos_embed = torch.from_numpy(get_1d_sincos_pos_embed_from_grid(self.config.hidden_size,np.arange(hidden_states.size(1),dtype=np.float32))).float()
+        k_pos_embed = torch.from_numpy(get_2d_sincos_pos_embed(self.config.hidden_size, hidden_states.size(1), cls_token=False)).float()
+
+        if encoder_hidden_states is None:
+            encoder_hidden_states = hidden_states
+
+        qk_pos_embed = torch.cat([q_pos_embed, k_pos_embed], dim = 0).unsqueeze(0).to(dtype=hidden_states.dtype)
         
         key_layer = self.transpose_for_scores(self.key(encoder_hidden_states + qk_pos_embed))
         value_layer = self.transpose_for_scores(self.value(encoder_hidden_states))
-        attention_mask = encoder_attention_mask
+        # attention_mask = encoder_attention_mask
 
-        mixed_query_layer = self.query(hidden_states + self.q_pos_embed.unsqueeze(0).to(dtype=hidden_states.dtype))
+        mixed_query_layer = self.query(hidden_states + q_pos_embed.unsqueeze(0).to(dtype=hidden_states.dtype))
 
         query_layer = self.transpose_for_scores(mixed_query_layer)
 
@@ -175,11 +190,11 @@ class VisionMultiHeadAttention(nn.Module):
         outputs = outputs + (past_key_value,)
         return outputs
 
-class VisionEncoderLayer(nn.Module):
+class TransformerEncoderLayer(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.hidden_size = config.hidden_size
-        self.self_attn = VisionMultiHeadAttention(config)
+        self.self_attn = MultiHeadAttention(config)
         self.input_layernorm = nn.LayerNorm(self.hidden_size, eps=config.layer_norm_eps)
         self.mlp = MLP(config)
         self.post_attention_layernorm = nn.LayerNorm(self.hidden_size, eps=config.layer_norm_eps)
@@ -187,7 +202,7 @@ class VisionEncoderLayer(nn.Module):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        attention_mask: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
         output_attentions: Optional[bool] = False,
     ) -> Tuple[torch.FloatTensor]:
         """
@@ -222,7 +237,58 @@ class VisionEncoderLayer(nn.Module):
 
         return outputs
 
-class VisionEncoder(nn.Module):
+class TransformerDecoderLayer(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.hidden_size = config.hidden_size
+        self.self_attn = MultiHeadAttention(config)
+        self.input_layernorm = nn.LayerNorm(self.hidden_size, eps=config.layer_norm_eps)
+        self.mlp = MLP(config)
+        self.post_attention_layernorm = nn.LayerNorm(self.hidden_size, eps=config.layer_norm_eps)
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        query_hidden_states: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        query_attention_mask: Optional[torch.Tensor] = None,
+        output_attentions: Optional[bool] = False,
+    ) -> Tuple[torch.FloatTensor]:
+        """
+        Args:
+            hidden_states (`torch.FloatTensor`): input to the layer of shape `(batch, seq_len, embed_dim)`
+            attention_mask (`torch.FloatTensor`): attention mask of size
+                `(batch, 1, tgt_len, src_len)` where padding elements are indicated by very large negative values.
+                `(config.encoder_attention_heads,)`.
+            output_attentions (`bool`, *optional*):
+                Whether or not to return the attentions tensors of all attention layers. See `attentions` under
+                returned tensors for more detail.
+        """
+        residual = hidden_states
+
+        hidden_states = self.input_layernorm(hidden_states)
+        hidden_states, attn_weights = self.self_attn.forward(
+            hidden_states=query_hidden_states,
+            encoder_hidden_states=hidden_states,
+            attention_mask=attention_mask,
+            encoder_attention_mask=query_attention_mask,
+            output_attentions=output_attentions,
+        )
+        hidden_states = hidden_states + residual
+        residual = hidden_states
+        hidden_states = self.post_attention_layernorm(hidden_states)
+        hidden_states = self.mlp(hidden_states)
+
+        hidden_states = hidden_states + residual
+
+        outputs = (hidden_states,)
+
+        if output_attentions:
+            outputs += (attn_weights,)
+
+        return outputs
+
+class TransformerEncoder(nn.Module):
     """
     Transformer encoder consisting of `config.num_hidden_layers` self attention layers. Each layer is a
     [`MplugOwlVisionEncoderLayer`].
@@ -235,7 +301,7 @@ class VisionEncoder(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
-        self.layers = nn.ModuleList([VisionEncoderLayer(config) for _ in range(config.num_hidden_layers)])
+        self.layers = nn.ModuleList([TransformerEncoderLayer(config) for _ in range(config.num_hidden_layers)])
         self.gradient_checkpointing = False
 
     def forward(
@@ -296,6 +362,103 @@ class VisionEncoder(nn.Module):
                 layer_outputs = encoder_layer(
                     hidden_states,
                     attention_mask,
+                    output_attentions=output_attentions,
+                )
+
+            hidden_states = layer_outputs[0]
+
+            if output_attentions:
+                all_attentions = all_attentions + (layer_outputs[1],)
+
+        if output_hidden_states:
+            encoder_states = encoder_states + (hidden_states,)
+
+        if not return_dict:
+            return tuple(v for v in [hidden_states, encoder_states, all_attentions] if v is not None)
+        return BaseModelOutput(
+            last_hidden_state=hidden_states, hidden_states=encoder_states, attentions=all_attentions
+        )
+    
+class TransformerDecoder(nn.Module):
+    """
+    Transformer encoder consisting of `config.num_hidden_layers` self attention layers. Each layer is a
+    [`MplugOwlVisionEncoderLayer`].
+
+    Args:
+        config (`MplugOwlVisionConfig`):
+            The corresponding vision configuration for the `MplugOwlEncoder`.
+    """
+
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+        self.layers = nn.ModuleList([TransformerDecoderLayer(config) for _ in range(config.num_hidden_layers)])
+        self.gradient_checkpointing = False
+
+    def forward(
+        self,
+        inputs_embeds,
+        input_query_embeds,
+        attention_mask: Optional[torch.Tensor] = None,
+        query_attention_mask: Optional[torch.Tensor] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
+    ) -> Union[Tuple, BaseModelOutput]:
+        r"""
+        Args:
+            inputs_embeds (`torch.FloatTensor` of shape `(batch_size, sequence_length, hidden_size)`):
+                Embedded representation of the inputs. Should be float, not int tokens.
+            attention_mask (`torch.Tensor` of shape `(batch_size, sequence_length)`, *optional*):
+                Mask to avoid performing attention on padding token indices. Mask values selected in `[0, 1]`:
+
+                - 1 for tokens that are **not masked**,
+                - 0 for tokens that are **masked**.
+
+                [What are attention masks?](../glossary#attention-mask)
+            output_attentions (`bool`, *optional*):
+                Whether or not to return the attentions tensors of all attention layers. See `attentions` under
+                returned tensors for more detail.
+            output_hidden_states (`bool`, *optional*):
+                Whether or not to return the hidden states of all layers. See `hidden_states` under returned tensors
+                for more detail.
+            return_dict (`bool`, *optional*):
+                Whether or not to return a [`~utils.ModelOutput`] instead of a plain tuple.
+        """
+        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_hidden_states = (
+            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+        )
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+
+        encoder_states = () if output_hidden_states else None
+        all_attentions = () if output_attentions else None
+
+        hidden_states = inputs_embeds
+        for idx, encoder_layer in enumerate(self.layers):
+            if output_hidden_states:
+                encoder_states = encoder_states + (hidden_states,)
+            if self.gradient_checkpointing and self.training:
+
+                def create_custom_forward(module):
+                    def custom_forward(*inputs):
+                        return module(*inputs, output_attentions)
+
+                    return custom_forward
+
+                layer_outputs = torch.utils.checkpoint.checkpoint(
+                    create_custom_forward(encoder_layer),
+                    hidden_states,
+                    input_query_embeds,
+                    attention_mask,
+                    query_attention_mask,
+                )
+            else:
+                layer_outputs = encoder_layer(
+                    hidden_states,
+                    input_query_embeds,
+                    attention_mask,
+                    query_attention_mask,
                     output_attentions=output_attentions,
                 )
 

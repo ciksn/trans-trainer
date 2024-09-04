@@ -179,10 +179,12 @@ def build_data_module(data_args,tokenzier:PreTrainedTokenizer = None) -> Dict:
     """
     train_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args, "train", tokenzier)
     eval_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args, "eval", tokenzier)
+    test_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args, "test", tokenzier)
     collator = COLLATE_REGISTRY.get(data_args.dataset_name+"_collate_fn")()
     return dict(
         train_dataset = train_dataset, # TODO if there needs quote
         eval_dataset = eval_dataset,
+        test_dataset = test_dataset,
         data_collator = collator
     )
 
@@ -296,7 +298,6 @@ def train():
     data_module = build_data_module(data_args,tokenizer)
 
     compute_metric = multireference_text_metric(tokenizer)
-
     trainer = custom_trainer(model=model,
                     tokenizer=tokenizer,
                     args=training_args,

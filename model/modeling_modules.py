@@ -41,7 +41,7 @@ class ObjectLevel(nn.Module):
         input_object: torch.Tensor,
         input_scene: torch.Tensor,
     ) -> torch.Tensor:
-        encoder_hidden_states = self.object_encoder(input_object)[0]
+        encoder_hidden_states = self.object_encoder(self.embed_object(input_object))[0]
         mixed_query_embed = input_scene + self.learnable_parameters
         output = self.object_decoder(encoder_hidden_states,mixed_query_embed)[0]
         return output
@@ -57,7 +57,7 @@ class MotionLevel(nn.Module):
         input_object: torch.Tensor,
     ) -> torch.Tensor:
         actual_input = torch.cat((input_scene,input_object),dim=1)
-        output = self.vision_encoder.forward(actual_input)
+        output = self.vision_encoder.forward(actual_input)[0]
         return output
     
 class TextGeneration(nn.Module):
@@ -68,11 +68,6 @@ class TextGeneration(nn.Module):
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size)
         self.encoder = TransformerEncoder(config)
         self.decoder = TransformerDecoder(config)
-        
-        mask = torch.tril(torch.ones((self.caption_seq_len, self.caption_seq_len)))
-        mask = mask.masked_fill(mask == 0, float('-inf'))
-        mask = mask.masked_fill(mask == 1, 0)
-        self.register_buffer("casual_mask",mask,True)
 
     def forward(
         self,
@@ -80,13 +75,20 @@ class TextGeneration(nn.Module):
         input_ids: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
+        mask = torch.tril(torch.ones((input_ids.size(1), input_visual.size(1))))
+        mask = mask.masked_fill(mask == 0, float('-inf'))
+        mask = mask.masked_fill(mask == 1, 0)
+        mask = mask.to(input_visual.device)
+
         if input_ids is None:
             for step in range(self.caption_seq_len):
                 pass
         else:
             word_embeds = self.word_embedding(input_ids)
-            kv_vector = self.encoder(input_visual)
-            probs = self.decoder(kv_vector,word_embeds,self.casual_mask,)
+            kv_vector = self.encoder(input_visual)[0]
+            ic(word_embeds.size())
+            ic(kv_vector.size())
+            probs = self.decoder(kv_vector,word_embeds,mask,)
             logits = self.lm_head(probs)
             return logits
     

@@ -11,6 +11,9 @@ from model.modeling_modules import SceneLevel, ObjectLevel, MotionLevel, TextGen
 from model.configuration_model import custom_model_config
 from constants import IGNORE_INDEX
 
+from transformers.pipelines import AutoTokenizer
+from icecream import ic
+
 class custom_model(PreTrainedModel):
     """
     Model definition here
@@ -54,19 +57,19 @@ class custom_model(PreTrainedModel):
         object_output = self.ObjectLevel(input_object, scene_output)
         motion_output = self.MotionLevel(scene_output,object_output)
 
-        mixed_output = self.module_downsample(torch.cat((scene_output,object_output,motion_output),dim=-1))
+        mixed_output = self.module_downsample(torch.cat((scene_output,object_output,motion_output[:,:32,:]),dim=-1))
         mixed_feat = self.input_downsample(torch.cat((input_2d,input_3d,input_object),dim=-1))
         actual_visual_input = self.mixed_downsample(torch.cat((mixed_output,mixed_feat),dim=-1))
 
         #TODO below
-        input_ids, attention_mask = self.tokenizer(
+        input_ids = self.tokenizer(
             labels,
             truncation=True,
             padding='max_length',
-            max_length=self.caption_length,
-            return_tensors='pt')
+            max_length=self.config.caption_seq_len,
+            return_tensors='pt')['input_ids'].to(actual_visual_input.device)
         
-        logits = self.text_generation(actual_visual_input,input_ids[...,:-1],attention_mask)
+        logits = self.text_generation(actual_visual_input,input_ids[...,:-1],None)
 
         #TODO Trick: consider label smoothing here
         loss = None
@@ -92,8 +95,14 @@ class custom_model(PreTrainedModel):
         pass
 
 if __name__ == "__main__":
+    device = "cuda:0"
     # Test code here -> to be REMOVED
+    tokenizer = AutoTokenizer.from_pretrained("/home/zeyu/.cache/huggingface/hub/models--bert-base-uncased/snapshots/86b5e0934494bd15c9632b12f734a8a67f723594")
     custom_model_config_b = custom_model_config.from_pretrained("/home/zeyu/work/deep_learning/functional_files/trans_trainer/test/config.json")
-    model = custom_model(custom_model_config_b, None)
-    print(model)
-    torch.save(model,"/home/zeyu/work/deep_learning/functional_files/trans_trainer/test/model.pth",)
+    model = custom_model(custom_model_config_b, tokenizer).to(device)
+    input_2d = torch.ones((1,32,768)).float().to(device)
+    input_3d = torch.ones((1,32,1024)).float().to(device)
+    input_object = torch.ones((1,32,2048)).float().to(device)
+    labels = ["a man is eating"]
+
+    output = model.forward(input_2d,input_3d,input_object,labels)

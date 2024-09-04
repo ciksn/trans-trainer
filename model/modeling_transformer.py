@@ -10,7 +10,7 @@ from transformers.models.llama.configuration_llama import LlamaConfig
 from transformers.configuration_utils import PretrainedConfig
 from transformers.modeling_outputs import BaseModelOutput
 
-from .modeling_pos import (
+from model.modeling_pos import (
     get_abs_pos,
     get_1d_sincos_pos_embed_from_grid,
     get_2d_sincos_pos_embed_from_grid,
@@ -53,6 +53,7 @@ class VisualMLP(nn.Module):
 
 class DownSampleMLP(nn.Module):
     def __init__(self, input_dim, output_dim, config):
+        super().__init__()
         self.activation_fn = QuickGELU()
         self.fc1 = nn.Linear(input_dim, config.intermediate_size)
         self.fc2 = nn.Linear(config.intermediate_size, output_dim)
@@ -123,7 +124,7 @@ class MultiHeadAttention(nn.Module):
     ):
         """
         Args:
-            hidden_state: Indicate query
+            hidden_state: indicate query
             attention_mask: final attention weights mask
                 range [-inf,0] size [batch_size, q_len, k_len]
             head_mask: attention head mask to mask several given heads
@@ -143,9 +144,10 @@ class MultiHeadAttention(nn.Module):
         if encoder_hidden_states is None:
             encoder_hidden_states = hidden_states
 
+        # TODO what qk_pos_embed here for
         qk_pos_embed = torch.cat([q_pos_embed, k_pos_embed], dim = 0).unsqueeze(0).to(dtype=hidden_states.dtype)
         
-        key_layer = self.transpose_for_scores(self.key(encoder_hidden_states + qk_pos_embed))
+        key_layer = self.transpose_for_scores(self.key(encoder_hidden_states + k_pos_embed))
         value_layer = self.transpose_for_scores(self.value(encoder_hidden_states))
         # attention_mask = encoder_attention_mask
 
@@ -267,7 +269,7 @@ class TransformerDecoderLayer(nn.Module):
         residual = hidden_states
 
         hidden_states = self.input_layernorm(hidden_states)
-        hidden_states, attn_weights = self.self_attn.forward(
+        hidden_states, attn_weights = self.self_attn(
             hidden_states=query_hidden_states,
             encoder_hidden_states=hidden_states,
             attention_mask=attention_mask,

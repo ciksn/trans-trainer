@@ -1,16 +1,19 @@
 import torch
 import numpy as np
 import torch.nn as nn
-from .modeling_transformer import TransformerEncoder, TransformerDecoder, MLP, DownSampleMLP
+from typing import Tuple,Dict,Optional
 from transformers.configuration_utils import PretrainedConfig
+from model.modeling_transformer import TransformerEncoder, TransformerDecoder, MLP, DownSampleMLP
+
+from icecream import ic
 
 class SceneLevel(nn.Module):
     def __init__(self, config: PretrainedConfig) -> None:
+        super().__init__()
         self.embed_2d = nn.Linear(config.dim_2d,config.hidden_size)
         self.embed_3d = nn.Linear(config.dim_3d,config.hidden_size)
         self.downsample = DownSampleMLP(2*config.hidden_size,config.hidden_size,config)
         self.vision_encoder = TransformerEncoder(config)
-        super().__init__(config)
 
     def forward(
         self,
@@ -27,11 +30,11 @@ class SceneLevel(nn.Module):
     
 class ObjectLevel(nn.Module):
     def __init__(self, config: PretrainedConfig) -> None:
+        super().__init__()
         self.embed_object = nn.Linear(config.dim_object,config.hidden_size)
         self.object_encoder = TransformerEncoder(config)
         self.object_decoder = TransformerDecoder(config)
         self.learnable_parameters = nn.Parameter(torch.randn(1, config.num_learnable_queries, config.hidden_size))
-        super().__init__(config)
 
     def forward(
         self,
@@ -45,11 +48,8 @@ class ObjectLevel(nn.Module):
     
 class MotionLevel(nn.Module):
     def __init__(self, config: PretrainedConfig) -> None:
+        super().__init__()
         self.vision_encoder = TransformerEncoder(config)
-        super().__init__(config)
-
-    def generate_binary_mask(self,):
-        pass
 
     def forward(
         self,
@@ -62,22 +62,31 @@ class MotionLevel(nn.Module):
     
 class TextGeneration(nn.Module):
     def __init__(self, config: PretrainedConfig) -> None:
+        super().__init__()
         self.caption_seq_len = config.caption_seq_len
         self.word_embedding = nn.Embedding(config.vocab_size,config.hidden_size)
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size)
         self.encoder = TransformerEncoder(config)
         self.decoder = TransformerDecoder(config)
-        super().__init__(config)
+        
+        mask = torch.tril(torch.ones((self.caption_seq_len, self.caption_seq_len)))
+        mask = mask.masked_fill(mask == 0, float('-inf'))
+        mask = mask.masked_fill(mask == 1, 0)
+        self.register_buffer("casual_mask",mask,True)
 
     def forward(
         self,
         input_visual: torch.Tensor,
-        input_ids: torch.Tensor,
-        attention_mask: torch.Tensor,
+        input_ids: Optional[torch.Tensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        # TODO
-        pass
-
-    def generate(self,input_visual):
-        pass
+        if input_ids is None:
+            for step in range(self.caption_seq_len):
+                pass
+        else:
+            word_embeds = self.word_embedding(input_ids)
+            kv_vector = self.encoder(input_visual)
+            probs = self.decoder(kv_vector,word_embeds,self.casual_mask,)
+            logits = self.lm_head(probs)
+            return logits
     

@@ -5,9 +5,11 @@ from torch import Tensor
 from transformers import PreTrainedModel
 from transformers.tokenization_utils import PreTrainedTokenizer
 from transformers.configuration_utils import PretrainedConfig
-from transformers.modeling_outputs import ModelOutput
-from .modeling_transformer import DownSampleMLP
-from .modeling_modules import SceneLevel, ObjectLevel, MotionLevel, TextGeneration
+from transformers.modeling_outputs import ModelOutput,CausalLMOutput
+from model.modeling_transformer import DownSampleMLP
+from model.modeling_modules import SceneLevel, ObjectLevel, MotionLevel, TextGeneration
+from model.configuration_model import custom_model_config
+from constants import IGNORE_INDEX
 
 class custom_model(PreTrainedModel):
     """
@@ -23,14 +25,14 @@ class custom_model(PreTrainedModel):
         super(custom_model,self).__init__(config, *inputs, **kwargs)
         self.config = config
         self.tokenizer = tokenizer
-        self.loss = nn.CrossEntropyLoss()
+        self.loss = nn.CrossEntropyLoss(ignore_index=IGNORE_INDEX,label_smoothing=config.label_smoothing)
         self.SceneLevel = SceneLevel(config)
         self.ObjectLevel = ObjectLevel(config)
         self.MotionLevel = MotionLevel(config)
 
         self.module_downsample = nn.Linear(3 * config.hidden_size, config.hidden_size)
         self.input_downsample = nn.Linear(config.dim_2d + config.dim_3d + config.dim_object, config.hidden_size)
-        self.mixed_downsample = DownSampleMLP(2 * config.hidden_size, config.hidden_size)
+        self.mixed_downsample = DownSampleMLP(2 * config.hidden_size, config.hidden_size,config)
 
         self.text_generation = TextGeneration(config)
 
@@ -45,6 +47,8 @@ class custom_model(PreTrainedModel):
         The inputs need to be flattened here since (**input) when called
         The output of the main model should be "ModelOutput"
         or dict contains key "loss" / 1st element be loss
+
+        Output is a Dict
         """
         scene_output = self.SceneLevel(input_2d, input_3d)
         object_output = self.ObjectLevel(input_object, scene_output)
@@ -55,18 +59,41 @@ class custom_model(PreTrainedModel):
         actual_visual_input = self.mixed_downsample(torch.cat((mixed_output,mixed_feat),dim=-1))
 
         #TODO below
-        input_ids, attention_mask = self.tokenizer(labels,...)
-        logits = self.text_generation(actual_visual_input,input_ids,attention_mask)
+        input_ids, attention_mask = self.tokenizer(
+            labels,
+            truncation=True,
+            padding='max_length',
+            max_length=self.caption_length,
+            return_tensors='pt')
+        
+        logits = self.text_generation(actual_visual_input,input_ids[...,:-1],attention_mask)
 
         #TODO Trick: consider label smoothing here
-        loss = self.loss.forward(logits, self.tokenizer(labels,...))
-        
+        loss = None
+        if labels is not None:
+            shift_logits = logits[..., :-1, :].contiguous()
+            shift_labels = input_ids[..., 1:].contiguous()
+
+            shift_logits = shift_logits.view(-1, self.config.vocab_size)
+            shift_labels = shift_labels.view(-1)
+
+            shift_labels = shift_labels.to(shift_logits.device)
+            loss = self.loss(shift_logits, shift_labels)
+
         #when computing loss, remember to distinct single batch when training or batch of list when eval
 
-        return ModelOutput(
+        return CausalLMOutput(
             loss = loss,
             logits = logits
         )
-
+    
+    @torch.no_grad()
     def generate(self,input_2d, input_3d, input_object):
         pass
+
+if __name__ == "__main__":
+    # Test code here -> to be REMOVED
+    custom_model_config_b = custom_model_config.from_pretrained("/home/zeyu/work/deep_learning/functional_files/trans_trainer/test/config.json")
+    model = custom_model(custom_model_config_b, None)
+    print(model)
+    torch.save(model,"/home/zeyu/work/deep_learning/functional_files/trans_trainer/test/model.pth",)

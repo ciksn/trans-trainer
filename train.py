@@ -122,7 +122,9 @@ class DataArguments:
     caption_seq_len: int = field(default='',metadata={"help":""})
     video_seq_len: int = field(default='',metadata={"help":""})
     caption_file_path: str = field(default='',metadata={"help":""})
-    video_folder_path: str = field(default='',metadata={"help":""})
+    video_2d_path: str = field(default='',metadata={"help":""})
+    video_3d_path: str = field(default='',metadata={"help":""})
+    video_object_path: str = field(default='',metadata={"help":""})
 
 @dataclass
 class TrainingArguments(transformers.TrainingArguments):
@@ -177,14 +179,14 @@ def build_data_module(data_args,tokenzier:PreTrainedTokenizer = None) -> Dict:
     """
     Get dataset and collator function for training
     """
-    train_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args, "train", tokenzier)
-    eval_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args, "eval", tokenzier)
-    test_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args, "test", tokenzier)
+    train_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args, "train")
+    eval_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args, "eval")
+    test_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args, "test")
     collator = COLLATE_REGISTRY.get(data_args.dataset_name+"_collate_fn")()
     return dict(
         train_dataset = train_dataset, # TODO if there needs quote
         eval_dataset = eval_dataset,
-        test_dataset = test_dataset,
+        # test_dataset = test_dataset,
         data_collator = collator
     )
 
@@ -233,8 +235,6 @@ def train():
             padding_side="right",
             use_fast=False,
         )
-        tokenizer.pad_token = tokenizer.unk_token
-        tokenizer.pad_token_id = tokenizer.unk_token_id
     else:
         tokenizer = None
 

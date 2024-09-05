@@ -1,14 +1,18 @@
 #!/bin/bash
-export MODEL_LOAD='/home/zeyu/.cache/huggingface/hub/models--TinyLlama--TinyLlama-1.1B-intermediate-step-1431k-3T/snapshots/036fa4651240b9a1487f709833b9e4b96b4c1574'
-export CONFIG_LOAD='/home/zeyu/.cache/huggingface/hub/models--TinyLlama--TinyLlama-1.1B-intermediate-step-1431k-3T/snapshots/036fa4651240b9a1487f709833b9e4b96b4c1574'
-export TOKENIZER_LOAD='/home/zeyu/.cache/huggingface/hub/models--TinyLlama--TinyLlama-1.1B-intermediate-step-1431k-3T/snapshots/036fa4651240b9a1487f709833b9e4b96b4c1574'
-export CACHE_DIR='/home/zeyu/.cache/huggingface/hub/models--TinyLlama--TinyLlama-1.1B-intermediate-step-1431k-3T/snapshots/036fa4651240b9a1487f709833b9e4b96b4c1574'
+export MODEL_LOAD='/home/zeyu/work/deep_learning/functional_files/trans_trainer/checkpoints'
+export CONFIG_LOAD='/home/zeyu/work/deep_learning/functional_files/trans_trainer/checkpoints'
+export TOKENIZER_LOAD='/home/zeyu/.cache/huggingface/hub/models--bert-base-uncased/snapshots/86b5e0934494bd15c9632b12f734a8a67f723594'
+export CACHE_DIR='/home/zeyu/.cache/huggingface/hub/models--bert-base-uncased/snapshots/86b5e0934494bd15c9632b12f734a8a67f723594'
 
-export DATASET_NAME="msrvtt_dataset"
-export CAPTION_FILE_PATH="/home/zeyu/work/deep_learning/row_dataset/video_captioning/msrvtt/train_val_test_annotation/train_val_test_videodatainfo.json"
-export VIDEO_FOLDER_PATH="/home/zeyu/work/deep_learning/extracted_dataset/msrvtt/CLIP-vitL14"
+export DATASET_NAME="bddx_dataset"
+export CAPTION_FILE_PATH="/home/zeyu/mnt/drive0/dataset/driving/BDD-X/BDD-X-Dataset/bddx.json"
+export VIDEO_2D_PATH="/home/zeyu/mnt/drive0/dataset/driving/BDD-X/CLIP-ViT_L14"
+export VIDEO_3D_PATH="/home/zeyu/mnt/drive0/dataset/driving/BDD-X/S3D"
+export VIDEO_OBJECT_PATH="/home/zeyu/mnt/drive0/dataset/driving/BDD-X/Fasterrcnn"
 
 python ../train.py \
+    --load_from_config False \
+    --load_from_pretrained False \
     --model_name_or_path $MODEL_LOAD \
     --config_name_or_path $CONFIG_LOAD \
     --need_tokenizer True \
@@ -17,23 +21,23 @@ python ../train.py \
     --version v1 \
     --dataset_name $DATASET_NAME \
     --caption_file_path $CAPTION_FILE_PATH \
-    --video_folder_path $VIDEO_FOLDER_PATH \
+    --video_2d_path $VIDEO_2D_PATH \
+    --video_3d_path $VIDEO_3D_PATH \
+    --video_object_path $VIDEO_OBJECT_PATH \
     --caption_seq_len 30 \
-    --video_seq_len 30 \
+    --video_seq_len 32 \
     --status "pretrain" \
     --optim "adamw_torch" \
     --load_best_model_at_end True \
-    --load_from_config False \
-    --load_from_pretrained False \
     --adam_beta1 0.9 \
     --adam_beta2 0.999 \
     --adam_epsilon 1e-08 \
     --bf16 True \
     --dataloader_drop_last False \
-    --dataloader_num_workers 0 \
+    --dataloader_num_workers 8 \
     --dataloader_pin_memory True \
-    --eval_steps 1 \
     --evaluation_strategy "epoch" \
+    --eval_steps 1 \
     --gradient_accumulation_steps 8 \
     --gradient_checkpointing False \
     --group_by_length False \
@@ -49,7 +53,7 @@ python ../train.py \
     --save_steps 1 \
     --save_total_limit 5 \
     --seed 42 \
-    --per_device_train_batch_size 1 \
-    --per_device_eval_batch_size 4 \
+    --per_device_train_batch_size 4 \
+    --per_device_eval_batch_size 16 \
     --weight_decay 0. \
     --warmup_ratio 0.03

@@ -148,7 +148,7 @@ class MultiHeadAttention(nn.Module):
 
         # TODO what qk_pos_embed here for
         qk_pos_embed = torch.cat([q_pos_embed, k_pos_embed], dim = 0).unsqueeze(0).to(dtype=q_hidden_states.dtype)
-
+        
         key_layer = self.transpose_for_scores(self.key(kv_hidden_states + k_pos_embed))
         value_layer = self.transpose_for_scores(self.value(kv_hidden_states))
 

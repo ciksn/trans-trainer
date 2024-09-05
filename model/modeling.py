@@ -70,6 +70,7 @@ class custom_model(PreTrainedModel):
             return_tensors='pt').to(actual_visual_input.device)
         
         input_ids = input_pack['input_ids']
+        # ic(input_ids)
         actual_input_ids = input_ids[...,:-1]
         # attention_mask = input_pack['attention_mask']
         T = actual_input_ids.size(-1)
@@ -92,6 +93,7 @@ class custom_model(PreTrainedModel):
             shift_labels = shift_labels.to(shift_logits.device)
             loss = self.loss(shift_logits, shift_labels)
 
+        # ic(loss.item())
         #when computing loss, remember to distinct single batch when training or batch of list when eval
 
         return CausalLMOutput(
@@ -112,6 +114,6 @@ if __name__ == "__main__":
     input_2d = torch.ones((1,32,768)).float().to(device)
     input_3d = torch.ones((1,32,1024)).float().to(device)
     input_object = torch.ones((1,32,2048)).float().to(device)
-    labels = ["a man is eating"]
+    labels = ["a man is eating","a woman is eating"]
 
     output = model.forward(input_2d,input_3d,input_object,labels)

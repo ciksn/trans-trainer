@@ -32,42 +32,51 @@ class bddx_dataset(Dataset): # <name>_dataset
         self.split = split
         self.caption_length = data_args.caption_seq_len
         self.video_length = data_args.video_seq_len
-        self.video_folder_path = data_args.video_folder_path
+        self.video_2d_path = data_args.video_2d_path
+        self.video_3d_path = data_args.video_3d_path
+        self.video_object_path = data_args.video_object_path
         self.caption_file_path = data_args.caption_file_path
 
         self.annotations, self.name_list = bddx_annotation_process(self.caption_file_path, self.split)
 
         self.item_list = []
         for annotation in self.annotations:
-            video_name = annotation['video_name']
-            video_path = os.path.join(self.video_folder_path,video_name)
+            video_name = annotation['video_name'][:-4]
             sentence = annotation['sentence']
-            self.item_list.append((video_path,sentence))
+            self.item_list.append((video_name,sentence))
         
-
     def __getitem__(self, index) -> Any:
-        path, sentence = self.item_list[index]
-        video_tensor = load_video(path,self.video_length,False,224,4,False)
+        video_name, labels = self.item_list[index]
+        # video_tensor = load_video(path,self.video_length,False,224,4,False)
+        input_2d = torch.from_numpy(np.load(os.path.join(self.video_2d_path,video_name+".npy"))).float()
+        input_3d = torch.from_numpy(np.load(os.path.join(self.video_3d_path,video_name+".npy"))).float()
+        input_object = torch.from_numpy(np.load(os.path.join(self.video_object_path,video_name+".npy"))).float()
         
         return {
-            'video_tensor': video_tensor,
-            'labels': sentence
+            'input_2d': input_2d,
+            'input_3d': input_3d,
+            'input_object': input_object,
+            'labels': labels
         }
 
     def __len__(self) -> int:
-        return len(self.annotations)
+        return len(self.item_list)
     
 @COLLATE_REGISTRY.register()
 class bddx_dataset_collate_fn(object): # <name>_dataset_collate_fn
     """
     """
     def __call__(self, instances: Sequence[Dict]) -> Dict[str, torch.Tensor | Any]:
-        video_tensor = torch.cat([_['video_tensor'] for _ in instances],dim=0)
-        caption = [_['caption'] for _ in instances]
+        input_2d = torch.cat([_['input_2d'].unsqueeze(0) for _ in instances],dim=0)
+        input_3d = torch.cat([_['input_3d'].unsqueeze(0) for _ in instances],dim=0)
+        input_object = torch.cat([_['input_object'].unsqueeze(0) for _ in instances],dim=0)
+        labels = [_['labels'] for _ in instances]
 
         return {
-            'video_tensor': video_tensor,
-            'labels': caption
+            'input_2d': input_2d,
+            'input_3d': input_3d,
+            'input_object': input_object,
+            'labels': labels
         }
 
     

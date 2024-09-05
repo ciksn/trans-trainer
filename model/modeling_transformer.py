@@ -116,11 +116,10 @@ class MultiHeadAttention(nn.Module):
 
     def forward(
         self,
-        hidden_states,
+        q_hidden_states,
+        kv_hidden_states=None,
         attention_mask=None,
         head_mask=None,
-        encoder_hidden_states=None,
-        encoder_attention_mask=None,
         past_key_value=None,
         output_attentions=False,
     ):
@@ -140,21 +139,20 @@ class MultiHeadAttention(nn.Module):
         # and values come from an encoder; the attention mask needs to be
         # such that the encoder's padding tokens are not attended to.
 
-        if encoder_hidden_states is None:
-            encoder_hidden_states = hidden_states
+        if kv_hidden_states is None:
+            kv_hidden_states = q_hidden_states
 
-        q_pos_embed = torch.from_numpy(get_1d_sincos_pos_embed_from_grid(self.config.hidden_size,np.arange(hidden_states.size(1),dtype=np.float32))).float().to(hidden_states.device)
+        q_pos_embed = torch.from_numpy(get_1d_sincos_pos_embed_from_grid(self.config.hidden_size,np.arange(q_hidden_states.size(1),dtype=np.float32))).float().to(hidden_states.device)
         # k_pos_embed = torch.from_numpy(get_2d_sincos_pos_embed(self.config.hidden_size, hidden_states.size(1), cls_token=False)).float()
-        k_pos_embed = torch.from_numpy(get_1d_sincos_pos_embed_from_grid(self.config.hidden_size,np.arange(encoder_hidden_states.size(1),dtype=np.float32))).float().to(hidden_states.device)
+        k_pos_embed = torch.from_numpy(get_1d_sincos_pos_embed_from_grid(self.config.hidden_size,np.arange(kv_hidden_states.size(1),dtype=np.float32))).float().to(hidden_states.device)
 
         # TODO what qk_pos_embed here for
-        qk_pos_embed = torch.cat([q_pos_embed, k_pos_embed], dim = 0).unsqueeze(0).to(dtype=hidden_states.dtype)
+        qk_pos_embed = torch.cat([q_pos_embed, k_pos_embed], dim = 0).unsqueeze(0).to(dtype=q_hidden_states.dtype)
 
-        key_layer = self.transpose_for_scores(self.key(encoder_hidden_states + k_pos_embed))
-        value_layer = self.transpose_for_scores(self.value(encoder_hidden_states))
-        # attention_mask = encoder_attention_mask
+        key_layer = self.transpose_for_scores(self.key(kv_hidden_states + k_pos_embed))
+        value_layer = self.transpose_for_scores(self.value(kv_hidden_states))
 
-        mixed_query_layer = self.query(hidden_states + q_pos_embed.unsqueeze(0).to(dtype=hidden_states.dtype))
+        mixed_query_layer = self.query(q_hidden_states + q_pos_embed.unsqueeze(0).to(dtype=q_hidden_states.dtype))
 
         query_layer = self.transpose_for_scores(mixed_query_layer)
 
@@ -224,8 +222,9 @@ class TransformerEncoderLayer(nn.Module):
 
         hidden_states = self.input_layernorm(hidden_states)
         hidden_states, attn_weights = self.self_attn(
-            hidden_states=hidden_states,
-            head_mask=attention_mask,
+            q_hidden_states=hidden_states,
+            kv_hidden_states=hidden_states,
+            attention_mask=attention_mask,
             output_attentions=output_attentions,
         )
         hidden_states = hidden_states + residual
@@ -247,16 +246,18 @@ class TransformerDecoderLayer(nn.Module):
         super().__init__()
         self.hidden_size = config.hidden_size
         self.self_attn = MultiHeadAttention(config)
+        self.cross_attn = MultiHeadAttention(config)
         self.input_layernorm = nn.LayerNorm(self.hidden_size, eps=config.layer_norm_eps)
+        self.cross_layernorm = nn.LayerNorm(self.hidden_size, eps=config.layer_norm_eps)
         self.mlp = MLP(config)
         self.post_attention_layernorm = nn.LayerNorm(self.hidden_size, eps=config.layer_norm_eps)
 
     def forward(
         self,
-        hidden_states: torch.Tensor,
-        query_hidden_states: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None,
-        query_attention_mask: Optional[torch.Tensor] = None,
+        q_hidden_states: torch.Tensor,
+        kv_hidden_states: torch.Tensor,
+        q_attention_mask: Optional[torch.Tensor] = None,
+        kv_attention_mask: Optional[torch.Tensor] = None,
         output_attentions: Optional[bool] = False,
     ) -> Tuple[torch.FloatTensor]:
         """
@@ -269,27 +270,38 @@ class TransformerDecoderLayer(nn.Module):
                 Whether or not to return the attentions tensors of all attention layers. See `attentions` under
                 returned tensors for more detail.
         """
-        residual = hidden_states
+        residual = q_hidden_states
 
-        hidden_states = self.input_layernorm(hidden_states)
-        hidden_states, attn_weights = self.self_attn(
-            hidden_states=query_hidden_states,
-            encoder_hidden_states=hidden_states,
-            attention_mask=attention_mask,
-            encoder_attention_mask=query_attention_mask,
+        q_hidden_states = self.input_layernorm(q_hidden_states)
+        q_hidden_states, self_attn_weights = self.self_attn.forward(
+            q_hidden_states=q_hidden_states,
+            kv_hidden_states=q_hidden_states,
+            attention_mask=q_attention_mask,
             output_attentions=output_attentions,
         )
-        hidden_states = hidden_states + residual
-        residual = hidden_states
-        hidden_states = self.post_attention_layernorm(hidden_states)
-        hidden_states = self.mlp(hidden_states)
+        q_hidden_states = q_hidden_states + residual
+        residual = q_hidden_states
 
-        hidden_states = hidden_states + residual
+        q_hidden_states = self.cross_layernorm(q_hidden_states)
+        q_hidden_states, cross_attn_weights = self.cross_attn.forward(
+            q_hidden_states=q_hidden_states,
+            kv_hidden_states=kv_hidden_states,
+            attention_mask=kv_attention_mask,
+            output_attentions=output_attentions,
+        )
 
-        outputs = (hidden_states,)
+        q_hidden_states = q_hidden_states + residual
+        residual = q_hidden_states
+
+        q_hidden_states = self.post_attention_layernorm(q_hidden_states)
+        q_hidden_states = self.mlp(q_hidden_states)
+
+        q_hidden_states = q_hidden_states + residual
+
+        outputs = (q_hidden_states,)
 
         if output_attentions:
-            outputs += (attn_weights,)
+            outputs += (self_attn_weights, cross_attn_weights)
 
         return outputs
 
@@ -402,10 +414,10 @@ class TransformerDecoder(nn.Module):
 
     def forward(
         self,
-        inputs_embeds,
-        input_query_embeds,
-        attention_mask: Optional[torch.Tensor] = None,
-        query_attention_mask: Optional[torch.Tensor] = None,
+        input_q_embeds,
+        input_kv_embeds,
+        q_attention_mask: Optional[torch.Tensor] = None,
+        kv_attention_mask: Optional[torch.Tensor] = None,
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
@@ -439,10 +451,11 @@ class TransformerDecoder(nn.Module):
         encoder_states = () if output_hidden_states else None
         all_attentions = () if output_attentions else None
 
-        hidden_states = inputs_embeds
+        # important here
+        hidden_states = input_q_embeds
         for idx, decoder_layer in enumerate(self.layers):
             if output_hidden_states:
-                encoder_states = encoder_states + (hidden_states,)
+                encoder_states = encoder_states + (input_kv_embeds,)
             if self.gradient_checkpointing and self.training:
 
                 def create_custom_forward(module):
@@ -454,16 +467,16 @@ class TransformerDecoder(nn.Module):
                 layer_outputs = torch.utils.checkpoint.checkpoint(
                     create_custom_forward(decoder_layer),
                     hidden_states,
-                    input_query_embeds,
-                    attention_mask,
-                    query_attention_mask,
+                    input_kv_embeds,
+                    q_attention_mask,
+                    kv_attention_mask,
                 )
             else:
                 layer_outputs = decoder_layer(
                     hidden_states,
-                    input_query_embeds,
-                    attention_mask,
-                    query_attention_mask,
+                    input_kv_embeds,
+                    q_attention_mask,
+                    kv_attention_mask,
                     output_attentions=output_attentions,
                 )
 

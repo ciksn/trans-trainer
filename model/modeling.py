@@ -62,14 +62,17 @@ class custom_model(PreTrainedModel):
         actual_visual_input = self.mixed_downsample(torch.cat((mixed_output,mixed_feat),dim=-1))
 
         #TODO below
-        input_ids = self.tokenizer(
+        input_pack = self.tokenizer(
             labels,
             truncation=True,
             padding='max_length',
             max_length=self.config.caption_seq_len,
-            return_tensors='pt')['input_ids'].to(actual_visual_input.device)
+            return_tensors='pt').to(actual_visual_input.device)
         
-        logits = self.text_generation(actual_visual_input,input_ids[...,:-1],None)
+        input_ids = input_pack['input_ids']
+        attention_mask = input_pack['attention_mask']
+        
+        logits = self.text_generation(actual_visual_input,input_ids[...,:-1],attention_mask[...,:-1])
 
         #TODO Trick: consider label smoothing here
         loss = None

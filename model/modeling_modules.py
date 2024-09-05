@@ -69,16 +69,23 @@ class TextGeneration(nn.Module):
         self.encoder = TransformerEncoder(config)
         self.decoder = TransformerDecoder(config)
 
+    def get_causal_mask(attention_mask: torch.Tensor) -> torch.Tensor:
+        _, T = attention_mask.size()
+        mask = torch.tril(torch.ones((1, T, T)))
+        mask = mask.masked_fill(mask == 0, float('-inf'))
+        mask = mask.masked_fill(mask == 1, 0)
+        mask = mask.to(attention_mask.device)
+        return mask
+
     def forward(
         self,
         input_visual: torch.Tensor,
         input_ids: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        mask = torch.tril(torch.ones((input_ids.size(1), input_visual.size(1))))
-        mask = mask.masked_fill(mask == 0, float('-inf'))
-        mask = mask.masked_fill(mask == 1, 0)
-        mask = mask.to(input_visual.device)
+        casual_mask = None
+        if attention_mask is not None:
+            casual_mask = self.get_causal_mask(attention_mask)
 
         if input_ids is None:
             for step in range(self.caption_seq_len):
@@ -86,9 +93,7 @@ class TextGeneration(nn.Module):
         else:
             word_embeds = self.word_embedding(input_ids)
             kv_vector = self.encoder(input_visual)[0]
-            ic(word_embeds.size())
-            ic(kv_vector.size())
-            probs = self.decoder(kv_vector,word_embeds,mask,)
+            probs = self.decoder.forward(word_embeds,kv_vector,casual_mask,None,)
             logits = self.lm_head(probs)
             return logits
     

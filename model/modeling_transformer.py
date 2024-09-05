@@ -142,9 +142,9 @@ class MultiHeadAttention(nn.Module):
         if kv_hidden_states is None:
             kv_hidden_states = q_hidden_states
 
-        q_pos_embed = torch.from_numpy(get_1d_sincos_pos_embed_from_grid(self.config.hidden_size,np.arange(q_hidden_states.size(1),dtype=np.float32))).float().to(hidden_states.device)
+        q_pos_embed = torch.from_numpy(get_1d_sincos_pos_embed_from_grid(self.config.hidden_size,np.arange(q_hidden_states.size(1),dtype=np.float32))).float().to(q_hidden_states.device)
         # k_pos_embed = torch.from_numpy(get_2d_sincos_pos_embed(self.config.hidden_size, hidden_states.size(1), cls_token=False)).float()
-        k_pos_embed = torch.from_numpy(get_1d_sincos_pos_embed_from_grid(self.config.hidden_size,np.arange(kv_hidden_states.size(1),dtype=np.float32))).float().to(hidden_states.device)
+        k_pos_embed = torch.from_numpy(get_1d_sincos_pos_embed_from_grid(self.config.hidden_size,np.arange(kv_hidden_states.size(1),dtype=np.float32))).float().to(q_hidden_states.device)
 
         # TODO what qk_pos_embed here for
         qk_pos_embed = torch.cat([q_pos_embed, k_pos_embed], dim = 0).unsqueeze(0).to(dtype=q_hidden_states.dtype)

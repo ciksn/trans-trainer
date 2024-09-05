@@ -70,14 +70,20 @@ class custom_model(PreTrainedModel):
             return_tensors='pt').to(actual_visual_input.device)
         
         input_ids = input_pack['input_ids']
-        attention_mask = input_pack['attention_mask']
+        actual_input_ids = input_ids[...,:-1]
+        # attention_mask = input_pack['attention_mask']
+        T = actual_input_ids.size(-1)
+
+        casual_mask = torch.tril(torch.ones((1, T, T)))
+        casual_mask = casual_mask.masked_fill(casual_mask == 0, float('-inf'))
+        casual_mask = casual_mask.masked_fill(casual_mask == 1, 0).to(actual_input_ids.device)
         
-        logits = self.text_generation(actual_visual_input,input_ids[...,:-1],attention_mask[...,:-1])
+        logits = self.text_generation(actual_visual_input,actual_input_ids,casual_mask,None)
 
         #TODO Trick: consider label smoothing here
         loss = None
         if labels is not None:
-            shift_logits = logits[..., :-1, :].contiguous()
+            shift_logits = logits[..., :, :].contiguous()
             shift_labels = input_ids[..., 1:].contiguous()
 
             shift_logits = shift_logits.view(-1, self.config.vocab_size)

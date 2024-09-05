@@ -69,31 +69,17 @@ class TextGeneration(nn.Module):
         self.encoder = TransformerEncoder(config)
         self.decoder = TransformerDecoder(config)
 
-    def get_causal_mask(attention_mask: torch.Tensor) -> torch.Tensor:
-        _, T = attention_mask.size()
-        mask = torch.tril(torch.ones((1, T, T)))
-        mask = mask.masked_fill(mask == 0, float('-inf'))
-        mask = mask.masked_fill(mask == 1, 0)
-        mask = mask.to(attention_mask.device)
-        return mask
-
     def forward(
         self,
         input_visual: torch.Tensor,
-        input_ids: Optional[torch.Tensor] = None,
+        input_ids: torch.Tensor,
+        casual_mask: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        casual_mask = None
-        if attention_mask is not None:
-            casual_mask = self.get_causal_mask(attention_mask)
-
-        if input_ids is None:
-            for step in range(self.caption_seq_len):
-                pass
-        else:
-            word_embeds = self.word_embedding(input_ids)
-            kv_vector = self.encoder(input_visual)[0]
-            probs = self.decoder.forward(word_embeds,kv_vector,casual_mask,None,)
-            logits = self.lm_head(probs)
-            return logits
+        
+        word_embeds = self.word_embedding(input_ids)
+        kv_vector = self.encoder(input_visual)[0]
+        probs = self.decoder.forward(word_embeds, kv_vector, casual_mask, attention_mask)[0]
+        logits = self.lm_head(probs)
+        return logits
     

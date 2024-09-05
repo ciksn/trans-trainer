@@ -63,7 +63,6 @@ class MotionLevel(nn.Module):
 class TextGeneration(nn.Module):
     def __init__(self, config: PretrainedConfig) -> None:
         super().__init__()
-        self.caption_seq_len = config.caption_seq_len
         self.word_embedding = nn.Embedding(config.vocab_size,config.hidden_size)
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size)
         self.encoder = TransformerEncoder(config)
@@ -79,7 +78,7 @@ class TextGeneration(nn.Module):
         
         word_embeds = self.word_embedding(input_ids)
         kv_vector = self.encoder(input_visual)[0]
-        probs = self.decoder.forward(word_embeds, kv_vector, casual_mask, attention_mask)[0]
+        probs = self.decoder(word_embeds, kv_vector, casual_mask, attention_mask)[0]
         logits = self.lm_head(probs)
         return logits
     

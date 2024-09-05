@@ -136,7 +136,7 @@ class TrainingArguments(transformers.TrainingArguments):
     optim: str = field(default="adamw_torch")
     load_best_model_at_end: bool = field(default=True,
                                          metadata={"help": "If specified, make sure the frequency of eval and save should be same"})
-    metric_for_best_model: str = field(default="CIDEr")
+    metric_for_best_model: str = field(default="/CIDEr")
 
     load_from_config: bool = field(default=False)
     load_from_pretrained: bool = field(default=False)
@@ -179,9 +179,9 @@ def build_data_module(data_args,tokenzier:PreTrainedTokenizer = None) -> Dict:
     """
     Get dataset and collator function for training
     """
-    train_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args, "train")
-    eval_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args, "eval")
-    test_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args, "test")
+    train_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args, "train", tokenzier)
+    eval_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args, "eval", tokenzier)
+    test_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args, "test", tokenzier)
     collator = COLLATE_REGISTRY.get(data_args.dataset_name+"_collate_fn")()
     return dict(
         train_dataset = train_dataset, # TODO if there needs quote

@@ -6,9 +6,9 @@ export CACHE_DIR='/home/zeyu/.cache/huggingface/hub/models--bert-base-uncased/sn
 
 export DATASET_NAME="bddx_dataset"
 export CAPTION_FILE_PATH="/home/zeyu/mnt/drive0/dataset/driving/BDD-X/BDD-X-Dataset/bddx.json"
-export VIDEO_2D_PATH="/home/zeyu/mnt/drive0/dataset/driving/BDD-X/CLIP-ViT_L14"
-export VIDEO_3D_PATH="/home/zeyu/mnt/drive0/dataset/driving/BDD-X/S3D"
-export VIDEO_OBJECT_PATH="/home/zeyu/mnt/drive0/dataset/driving/BDD-X/Fasterrcnn"
+export VIDEO_2D_PATH="/home/zeyu/work/deep_learning/extracted_dataset/bddx/CLIP-ViT_L14"
+export VIDEO_3D_PATH="/home/zeyu/work/deep_learning/extracted_dataset/bddx/S3D"
+export VIDEO_OBJECT_PATH="/home/zeyu/work/deep_learning/extracted_dataset/bddx/Fasterrcnn"
 
 python ../train.py \
     --load_from_config False \
@@ -38,10 +38,9 @@ python ../train.py \
     --dataloader_pin_memory True \
     --evaluation_strategy "epoch" \
     --eval_steps 1 \
-    --gradient_accumulation_steps 8 \
     --gradient_checkpointing False \
     --group_by_length False \
-    --learning_rate 2e-5 \
+    --learning_rate 1e-4 \
     --logging_steps 1 \
     --logging_strategy "steps" \
     --lr_scheduler_type "cosine" \
@@ -51,9 +50,12 @@ python ../train.py \
     --resume_from_checkpoint None \
     --save_strategy "epoch" \
     --save_steps 1 \
-    --save_total_limit 5 \
+    --save_total_limit 1 \
+    --metric_for_best_model "action/CIDEr" \
     --seed 42 \
-    --per_device_train_batch_size 4 \
-    --per_device_eval_batch_size 16 \
+    --gradient_accumulation_steps 8 \
+    --per_device_train_batch_size 16 \
+    --per_device_eval_batch_size 8 \
+    --eval_accumulation_steps 16 \
     --weight_decay 0. \
     --warmup_ratio 0.03

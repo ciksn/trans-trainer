@@ -27,10 +27,11 @@ class bddx_dataset(Dataset): # <name>_dataset
     Note:
     1. If the data not used in model input, the column will be removed unless
     """
-    def __init__(self, data_args, split:str) -> None:
+    def __init__(self, data_args, split:str, tokenizer: PreTrainedTokenizer) -> None:
         super().__init__()
         self.split = split
-        self.caption_length = data_args.caption_seq_len
+        self.tokenizer = tokenizer
+        self.each_cap_len = data_args.caption_seq_len // 2
         self.video_length = data_args.video_seq_len
         self.video_2d_path = data_args.video_2d_path
         self.video_3d_path = data_args.video_3d_path
@@ -42,21 +43,42 @@ class bddx_dataset(Dataset): # <name>_dataset
         self.item_list = []
         for annotation in self.annotations:
             video_name = annotation['video_name'][:-4]
-            sentence = annotation['sentence']
-            self.item_list.append((video_name,sentence))
+            # sentence = annotation['sentence']
+            action = annotation['action']
+            reason = annotation['reason']
+            self.item_list.append((video_name, action, reason))
         
     def __getitem__(self, index) -> Any:
-        video_name, labels = self.item_list[index]
+        video_name, action, reason = self.item_list[index]
         # video_tensor = load_video(path,self.video_length,False,224,4,False)
         input_2d = torch.from_numpy(np.load(os.path.join(self.video_2d_path,video_name+".npy"))).float()
         input_3d = torch.from_numpy(np.load(os.path.join(self.video_3d_path,video_name+".npy"))).float()
         input_object = torch.from_numpy(np.load(os.path.join(self.video_object_path,video_name+".npy"))).float()
-        
+
+        action = self.tokenizer(
+            action,
+            truncation=True,
+            padding='max_length',
+            max_length=self.each_cap_len,
+            return_tensors='pt'
+        )['input_ids']
+
+        reason = self.tokenizer(
+            reason,
+            truncation=True,
+            padding='max_length',
+            max_length=self.each_cap_len,
+            return_tensors='pt'
+        )['input_ids']
+
         return {
             'input_2d': input_2d,
             'input_3d': input_3d,
             'input_object': input_object,
-            'labels': labels
+            'labels': {
+                'action': action,
+                'reason': reason,
+            }
         }
 
     def __len__(self) -> int:
@@ -67,16 +89,21 @@ class bddx_dataset_collate_fn(object): # <name>_dataset_collate_fn
     """
     """
     def __call__(self, instances: Sequence[Dict]) -> Dict[str, torch.Tensor | Any]:
+
         input_2d = torch.cat([_['input_2d'].unsqueeze(0) for _ in instances],dim=0)
         input_3d = torch.cat([_['input_3d'].unsqueeze(0) for _ in instances],dim=0)
         input_object = torch.cat([_['input_object'].unsqueeze(0) for _ in instances],dim=0)
-        labels = [_['labels'] for _ in instances]
+        action = torch.cat([_['labels']['action'] for _ in instances],dim=0)
+        reason = torch.cat([_['labels']['reason'] for _ in instances],dim=0)
 
         return {
             'input_2d': input_2d,
             'input_3d': input_3d,
             'input_object': input_object,
-            'labels': labels
+            'labels':{
+                'action': action,
+                'reason': reason,
+            }
         }
 
     

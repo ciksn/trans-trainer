@@ -37,7 +37,8 @@ class custom_model(PreTrainedModel):
         self.input_downsample = nn.Linear(config.dim_2d + config.dim_3d + config.dim_object, config.hidden_size)
         self.mixed_downsample = DownSampleMLP(2 * config.hidden_size, config.hidden_size,config)
 
-        self.text_generation = TextGeneration(config)
+        self.action_generation = TextGeneration(config)
+        self.reason_generation = TextGeneration(config)
 
     def get_tokenizer(self,) -> PreTrainedTokenizer:
         return self.tokenizer
@@ -61,31 +62,24 @@ class custom_model(PreTrainedModel):
         mixed_feat = self.input_downsample(torch.cat((input_2d,input_3d,input_object),dim=-1))
         actual_visual_input = self.mixed_downsample(torch.cat((mixed_output,mixed_feat),dim=-1))
 
-        #TODO below
-        input_pack = self.tokenizer(
-            labels,
-            truncation=True,
-            padding='max_length',
-            max_length=self.config.caption_seq_len,
-            return_tensors='pt').to(actual_visual_input.device)
-        
-        input_ids = input_pack['input_ids']
-        # ic(input_ids)
-        actual_input_ids = input_ids[...,:-1]
+
+        actual_action_ids = labels['action'][...,:-1]
+        actual_reason_ids = labels['reason'][...,:-1]
         # attention_mask = input_pack['attention_mask']
-        T = actual_input_ids.size(-1)
+        T = actual_action_ids.size(-1)
 
         casual_mask = torch.tril(torch.ones((1, T, T)))
         casual_mask = casual_mask.masked_fill(casual_mask == 0, float('-inf'))
-        casual_mask = casual_mask.masked_fill(casual_mask == 1, 0).to(actual_input_ids.device)
+        casual_mask = casual_mask.masked_fill(casual_mask == 1, 0).to(actual_action_ids.device)
         
-        logits = self.text_generation(actual_visual_input,actual_input_ids,casual_mask,None)
+        logits_action = self.action_generation(actual_visual_input,actual_action_ids,casual_mask,None)
+        logits_reason = self.reason_generation(actual_visual_input,actual_reason_ids,casual_mask,None)
 
         #TODO Trick: consider label smoothing here
         loss = None
         if labels is not None:
-            shift_logits = logits[..., :, :].contiguous()
-            shift_labels = input_ids[..., 1:].contiguous()
+            shift_logits = logits_action[..., :, :].contiguous()
+            shift_labels = labels['action'][..., 1:].contiguous()
 
             shift_logits = shift_logits.view(-1, self.config.vocab_size)
             shift_labels = shift_labels.view(-1)
@@ -93,12 +87,24 @@ class custom_model(PreTrainedModel):
             shift_labels = shift_labels.to(shift_logits.device)
             loss = self.loss(shift_logits, shift_labels)
 
+            shift_logits = logits_reason[..., :, :].contiguous()
+            shift_labels = labels['reason'][..., 1:].contiguous()
+
+            shift_logits = shift_logits.view(-1, self.config.vocab_size)
+            shift_labels = shift_labels.view(-1)
+
+            shift_labels = shift_labels.to(shift_logits.device)
+            loss += self.loss(shift_logits, shift_labels)
+
         # ic(loss.item())
         #when computing loss, remember to distinct single batch when training or batch of list when eval
 
         return CausalLMOutput(
             loss = loss,
-            logits = logits
+            logits = {
+                'action': logits_action,
+                'reason': logits_reason,
+            }
         )
     
     @torch.no_grad()

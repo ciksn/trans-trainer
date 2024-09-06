@@ -41,9 +41,9 @@ class ObjectLevel(nn.Module):
         input_object: torch.Tensor,
         input_scene: torch.Tensor,
     ) -> torch.Tensor:
-        encoder_hidden_states = self.object_encoder(self.embed_object(input_object))[0]
-        mixed_query_embed = input_scene + self.learnable_parameters
-        output = self.object_decoder(encoder_hidden_states,mixed_query_embed)[0]
+        mixed_query_embed = self.object_encoder(self.embed_object(input_object))[0]
+        encoder_hidden_states = input_scene + self.learnable_parameters # do not move here
+        output = self.object_decoder(mixed_query_embed,encoder_hidden_states)[0]
         return output
     
 class MotionLevel(nn.Module):

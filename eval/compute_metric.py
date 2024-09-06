@@ -1,4 +1,5 @@
 import numpy as np
+import json
 from typing import Optional
 from transformers.tokenization_utils import PreTrainedTokenizer
 from .labels.eval import text_only_language_eval
@@ -25,12 +26,11 @@ class multireference_text_metric:
         labels_reason = self.tokenizer.batch_decode(labels['reason'],skip_special_tokens=True)
         output_reason = text_only_language_eval(pred_reason,labels_reason)
 
-        ic(pred_action[0])
-        ic(pred_reason[0])
-
         for key in output_action.keys():
             all_output["action/"+key] = output_action[key]
         for key in output_reason.keys():
             all_output["reason/"+key] = output_reason[key]
 
+        json.dump(pred_action,open("../checkpoints/outputs/action.json",mode='w+'))
+        json.dump(pred_reason,open("../checkpoints/outputs/reason.json",mode='w+'))
         return all_output

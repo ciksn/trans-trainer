@@ -40,7 +40,7 @@ python ../train.py \
     --eval_steps 1 \
     --gradient_checkpointing False \
     --group_by_length False \
-    --learning_rate 1e-4 \
+    --learning_rate 1e-5 \
     --logging_steps 1 \
     --logging_strategy "steps" \
     --lr_scheduler_type "cosine" \

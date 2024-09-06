@@ -23,7 +23,7 @@ class custom_model_config(PretrainedConfig):
         num_learnable_queries = 32,
         attention_probs_dropout_prob = 0.2,
         layer_norm_eps = 1e-6,
-        label_smoothing = 0.,
+        label_smoothing = 0.0,
         **kwargs,
     ):
         self.vocab_size = vocab_size

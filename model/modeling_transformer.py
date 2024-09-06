@@ -199,7 +199,7 @@ class TransformerEncoderLayer(nn.Module):
         self.hidden_size = config.hidden_size
         self.self_attn = MultiHeadAttention(config)
         self.input_layernorm = nn.LayerNorm(self.hidden_size, eps=config.layer_norm_eps)
-        self.mlp = VisualMLP(config)
+        self.mlp = MLP(config)
         self.post_attention_layernorm = nn.LayerNorm(self.hidden_size, eps=config.layer_norm_eps)
 
     def forward(

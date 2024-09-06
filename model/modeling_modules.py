@@ -3,7 +3,7 @@ import numpy as np
 import torch.nn as nn
 from typing import Tuple,Dict,Optional
 from transformers.configuration_utils import PretrainedConfig
-from model.modeling_transformer import TransformerEncoder, TransformerDecoder, MLP, DownSampleMLP
+from model.modeling_transformer import TransformerEncoder, TransformerDecoder, MLP, DownSampleMLP, MultiHeadAttention
 
 from icecream import ic
 
@@ -50,6 +50,8 @@ class MotionLevel(nn.Module):
     def __init__(self, config: PretrainedConfig) -> None:
         super().__init__()
         self.vision_encoder = TransformerEncoder(config)
+        self.cross_attn = MultiHeadAttention(config)
+        self.learnable_parameters = nn.Parameter(torch.randn(1, config.num_learnable_queries, config.hidden_size))
 
     def forward(
         self,
@@ -58,6 +60,7 @@ class MotionLevel(nn.Module):
     ) -> torch.Tensor:
         actual_input = torch.cat((input_scene,input_object),dim=1)
         output = self.vision_encoder.forward(actual_input)[0]
+        output = self.cross_attn.forward(self.learnable_parameters,output)[0]
         return output
     
 class TextGeneration(nn.Module):
@@ -65,20 +68,29 @@ class TextGeneration(nn.Module):
         super().__init__()
         self.word_embedding = nn.Embedding(config.vocab_size,config.hidden_size)
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size)
-        self.encoder = TransformerEncoder(config)
+        self.action_encoder = TransformerEncoder(config)
+        self.reason_encoder = TransformerEncoder(config)
         self.decoder = TransformerDecoder(config)
 
     def forward(
         self,
         input_visual: torch.Tensor,
-        input_ids: torch.Tensor,
-        casual_mask: Optional[torch.Tensor] = None,
-        attention_mask: Optional[torch.Tensor] = None,
+        action_input_ids: torch.Tensor,
+        reason_input_ids: torch.Tensor,
+        action_casual_mask: Optional[torch.Tensor] = None,
+        action_attention_mask: Optional[torch.Tensor] = None,
+        reason_casual_mask: Optional[torch.Tensor] = None,
+        reason_attention_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         
-        word_embeds = self.word_embedding(input_ids)
-        kv_vector = self.encoder(input_visual)[0]
-        probs = self.decoder(word_embeds, kv_vector, casual_mask, attention_mask)[0]
-        logits = self.lm_head(probs)
-        return logits
+        action_word_embeds = self.word_embedding(action_input_ids)
+        reason_word_embeds = self.word_embedding(reason_input_ids)
+        action_kv_vector = self.action_encoder(input_visual)[0]
+        reason_kv_vector = self.reason_encoder(input_visual)[0]
+        probs_action = self.decoder(action_word_embeds, action_kv_vector, action_casual_mask, action_attention_mask)[0]
+        probs_reason = self.decoder(reason_word_embeds, reason_kv_vector, reason_casual_mask, reason_attention_mask)[0]
+        logits_action = self.lm_head(probs_action)
+        logits_reason = self.lm_head(probs_reason)
+
+        return logits_action, logits_reason
     

@@ -24,7 +24,6 @@ import json
 import logging
 import transformers
 
-from constants import LOGDIR
 from train.model_trainner import custom_trainer
 from dataset.datasets import DATASET_REGISTRY,COLLATE_REGISTRY
 from model.modeling import custom_model

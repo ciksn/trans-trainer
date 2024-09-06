@@ -37,8 +37,7 @@ class custom_model(PreTrainedModel):
         self.input_downsample = nn.Linear(config.dim_2d + config.dim_3d + config.dim_object, config.hidden_size)
         self.mixed_downsample = DownSampleMLP(2 * config.hidden_size, config.hidden_size,config)
 
-        self.action_generation = TextGeneration(config)
-        self.reason_generation = TextGeneration(config)
+        self.text_generation = TextGeneration(config)
 
     def get_tokenizer(self,) -> PreTrainedTokenizer:
         return self.tokenizer
@@ -58,7 +57,7 @@ class custom_model(PreTrainedModel):
         object_output = self.ObjectLevel(input_object, scene_output)
         motion_output = self.MotionLevel(scene_output,object_output)
 
-        mixed_output = self.module_downsample(torch.cat((scene_output,object_output,motion_output[:,:32,:]),dim=-1))
+        mixed_output = self.module_downsample(torch.cat((scene_output,object_output,motion_output),dim=-1))
         mixed_feat = self.input_downsample(torch.cat((input_2d,input_3d,input_object),dim=-1))
         actual_visual_input = self.mixed_downsample(torch.cat((mixed_output,mixed_feat),dim=-1))
 
@@ -72,8 +71,10 @@ class custom_model(PreTrainedModel):
         casual_mask = casual_mask.masked_fill(casual_mask == 0, float('-inf'))
         casual_mask = casual_mask.masked_fill(casual_mask == 1, 0).to(actual_action_ids.device)
         
-        logits_action = self.action_generation(actual_visual_input,actual_action_ids,casual_mask,None)
-        logits_reason = self.reason_generation(actual_visual_input,actual_reason_ids,casual_mask,None)
+        logits_action, logits_reason = self.text_generation(
+            actual_visual_input,
+            actual_action_ids,actual_reason_ids,
+            casual_mask,None,casual_mask,None)
 
         #TODO Trick: consider label smoothing here
         loss = None
@@ -85,7 +86,7 @@ class custom_model(PreTrainedModel):
             shift_labels = shift_labels.view(-1)
 
             shift_labels = shift_labels.to(shift_logits.device)
-            loss = self.loss(shift_logits, shift_labels)
+            loss = self.loss(shift_logits, shift_labels) / 2
 
             shift_logits = logits_reason[..., :, :].contiguous()
             shift_labels = labels['reason'][..., 1:].contiguous()
@@ -94,7 +95,7 @@ class custom_model(PreTrainedModel):
             shift_labels = shift_labels.view(-1)
 
             shift_labels = shift_labels.to(shift_logits.device)
-            loss += self.loss(shift_logits, shift_labels)
+            loss += self.loss(shift_logits, shift_labels) / 2
 
         # ic(loss.item())
         #when computing loss, remember to distinct single batch when training or batch of list when eval

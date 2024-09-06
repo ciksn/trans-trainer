@@ -21,7 +21,7 @@ class custom_model_config(PretrainedConfig):
         caption_seq_len = 30,
         video_seq_len = 32,
         num_learnable_queries = 32,
-        attention_probs_dropout_prob = 0.2,
+        attention_probs_dropout_prob = 0.5,
         layer_norm_eps = 1e-6,
         label_smoothing = 0.0,
         **kwargs,

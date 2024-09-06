@@ -31,6 +31,19 @@ class multireference_text_metric:
         for key in output_reason.keys():
             all_output["reason/"+key] = output_reason[key]
 
-        json.dump(pred_action,open("../checkpoints/outputs/action.json",mode='w+'))
-        json.dump(pred_reason,open("../checkpoints/outputs/reason.json",mode='w+'))
+        action_json = []
+        for i in range(len(pred_action)):
+            action_json.append({
+                'pred': pred_action[i],
+                'gt': labels_action[i]
+            })
+        
+        reason_json = []
+        for i in range(len(pred_reason)):
+            reason_json.append({
+                'pred': pred_reason[i],
+                'gt': labels_reason[i]
+            })
+        json.dump(action_json,open("../checkpoints/outputs/action.json",mode='w+'))
+        json.dump(reason_json,open("../checkpoints/outputs/reason.json",mode='w+'))
         return all_output

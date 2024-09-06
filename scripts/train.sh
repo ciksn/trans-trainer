@@ -44,8 +44,8 @@ python ../train.py \
     --logging_steps 1 \
     --logging_strategy "steps" \
     --lr_scheduler_type "cosine" \
-    --num_train_epochs 30 \
-    --output_dir ./checkpoints \
+    --num_train_epochs 15 \
+    --output_dir ../checkpoints \
     --report_to tensorboard \
     --resume_from_checkpoint None \
     --save_strategy "epoch" \
@@ -57,5 +57,5 @@ python ../train.py \
     --per_device_train_batch_size 16 \
     --per_device_eval_batch_size 8 \
     --eval_accumulation_steps 16 \
-    --weight_decay 0. \
+    --weight_decay 0 \
     --warmup_ratio 0.03

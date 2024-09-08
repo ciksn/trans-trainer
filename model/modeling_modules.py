@@ -3,7 +3,7 @@ import numpy as np
 import torch.nn as nn
 from typing import Tuple,Dict,Optional
 from transformers.configuration_utils import PretrainedConfig
-from model.modeling_transformer import TransformerEncoder, TransformerDecoder, TransformerTextDecoder
+from model.modeling_transformer import TransformerEncoder, TransformerDecoder, TransformerTextEncoder
 
 from icecream import ic
 
@@ -69,9 +69,8 @@ class TextGeneration(nn.Module):
         super().__init__()
         self.word_embedding = nn.Embedding(config.vocab_size,config.hidden_size)
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size)
-        self.encoder = TransformerEncoder(config)
-        self.action_decoder = TransformerTextDecoder(config)        
-        self.reason_decoder = TransformerTextDecoder(config)
+        self.action_encoder = TransformerTextEncoder(config)
+        self.reason_encoder = TransformerTextEncoder(config)
 
     def forward(
         self,
@@ -84,12 +83,14 @@ class TextGeneration(nn.Module):
         reason_attention_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         
+        B,T,H = input_visual.size()
         action_word_embeds = self.word_embedding(action_input_ids)
         reason_word_embeds = self.word_embedding(reason_input_ids)
-        action_kv_vector = self.encoder(input_visual)[0]
-        reason_kv_vector = self.encoder(input_visual)[0]
-        probs_action = self.action_decoder(action_word_embeds, action_kv_vector, action_casual_mask, action_attention_mask)[0]
-        probs_reason = self.reason_decoder(reason_word_embeds, reason_kv_vector, reason_casual_mask, reason_attention_mask)[0]
+        action_input = torch.cat((input_visual, action_word_embeds),dim=1).to(input_visual.device)
+        reason_input = torch.cat((input_visual, reason_word_embeds),dim=1).to(input_visual.device)
+        probs_action = self.action_encoder(action_input, action_casual_mask)[0][:,T:,:]
+        probs_reason = self.reason_encoder(reason_input, reason_casual_mask)[0][:,T:,:]
+
         logits_action = self.lm_head(probs_action)
         logits_reason = self.lm_head(probs_reason)
 

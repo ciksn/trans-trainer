@@ -44,6 +44,17 @@ class custom_model(PreTrainedModel):
     def _prepare_model_inputs(self, inputs: torch.Tensor | None = None, bos_token_id: int | None = None, model_kwargs: torch.Dict[str, torch.Tensor] | None = None) -> Tuple[Tensor, str | None, Dict[str, Tensor]]:
         return super()._prepare_model_inputs(inputs, bos_token_id, model_kwargs)
 
+    def get_media_mask(self,T, K):
+        total_number = T+K
+
+        mask = torch.ones((total_number, total_number))
+        casual_mask = torch.tril(torch.ones((K,K)))
+        mask[:K,T:] = casual_mask
+
+        mask = mask.masked_fill(mask == 0, float('-inf'))
+        mask = mask.masked_fill(mask == 1, 0)
+        return mask.unsqueeze(0)
+
     def forward(self,input_2d, input_3d, input_object, labels):
         """
         The inputs need to be flattened here since (**input) when called
@@ -53,32 +64,28 @@ class custom_model(PreTrainedModel):
         Output is a Dict
         """
         scene_output = self.SceneLevel(input_2d, input_3d)
-        object_output = self.ObjectLevel(input_object, scene_output)
-        motion_output = self.MotionLevel(scene_output,object_output)
-
-        mixed_output = self.module_downsample(torch.cat((scene_output,object_output,motion_output),dim=-1))
-        actual_visual_input = mixed_output
+        # object_output = self.ObjectLevel(input_object, scene_output)
+        # motion_output = self.MotionLevel(scene_output,object_output)
+        # actual_visual_input = self.module_downsample(torch.cat((scene_output,object_output,motion_output),dim=-1))
+        actual_visual_input = scene_output
 
         actual_action_ids = labels['action'][...,:-1]
         actual_reason_ids = labels['reason'][...,:-1]
-        # attention_mask = input_pack['attention_mask']
 
-        action_T = actual_action_ids.size(-1)
-        action_casual_mask = torch.tril(torch.ones((1, action_T, action_T)))
-        action_casual_mask = action_casual_mask.masked_fill(action_casual_mask == 0, float('-inf'))
-        action_casual_mask = action_casual_mask.masked_fill(action_casual_mask == 1, 0).to(actual_action_ids.device)
-        
-        reason_T = actual_reason_ids.size(-1)
-        reason_casual_mask = torch.tril(torch.ones((1, reason_T, reason_T)))
-        reason_casual_mask = reason_casual_mask.masked_fill(reason_casual_mask == 0, float('-inf'))
-        reason_casual_mask = reason_casual_mask.masked_fill(reason_casual_mask == 1, 0).to(actual_action_ids.device)
+        B,T,H = actual_visual_input.size()
+        action_T = actual_action_ids.size(1)
+        reason_T = actual_reason_ids.size(1)
 
         logits_action, logits_reason = self.text_generation(
             actual_visual_input,
-            actual_action_ids,actual_reason_ids,
-            action_casual_mask,None,reason_casual_mask,None)
+            actual_action_ids,
+            actual_reason_ids,
+            self.get_media_mask(T,action_T).to(actual_visual_input.device),
+            None,
+            self.get_media_mask(T,reason_T).to(actual_visual_input.device),
+            None)
 
-        hypert = 0.3
+        hypert = 0.2
         #TODO Trick: consider label smoothing here
         loss = None
         if labels is not None:
@@ -140,36 +147,33 @@ class custom_model(PreTrainedModel):
 
         # Step 1: Get the visual inputs by passing them through Scene, Object, and Motion levels
         scene_output = self.SceneLevel(input_2d, input_3d)
-        object_output = self.ObjectLevel(input_object, scene_output)
-        motion_output = self.MotionLevel(scene_output, object_output)
-        mixed_output = self.module_downsample(torch.cat((scene_output, object_output, motion_output), dim=-1))
-        actual_visual_input = mixed_output
+        # object_output = self.ObjectLevel(input_object, scene_output)
+        # motion_output = self.MotionLevel(scene_output,object_output)
+        # actual_visual_input = self.module_downsample(torch.cat((scene_output,object_output,motion_output),dim=-1))
+        actual_visual_input = scene_output
 
-        B = actual_visual_input.size(0)
+
+        B,T,H = actual_visual_input.size()
     
         # Initialize with BOS token for action and reason
         action_generated = torch.tensor([[bos_token_id]]).expand((B,1)).to(actual_visual_input.device)
         reason_generated = torch.tensor([[bos_token_id]]).expand((B,1)).to(actual_visual_input.device)
+
         # Step 2: Iteratively generate tokens
         for step in range(max_length):
             # Apply causal masks for autoregressive generation
             action_T = action_generated.size(1)
-            action_casual_mask = torch.tril(torch.ones((1, action_T, action_T), device=action_generated.device))
-            action_casual_mask = action_casual_mask.masked_fill(action_casual_mask == 0, float('-inf'))
-            action_casual_mask = action_casual_mask.masked_fill(action_casual_mask == 1, 0)
-
             reason_T = reason_generated.size(1)
-            reason_casual_mask = torch.tril(torch.ones((1, reason_T, reason_T), device=reason_generated.device))
-            reason_casual_mask = reason_casual_mask.masked_fill(reason_casual_mask == 0, float('-inf'))
-            reason_casual_mask = reason_casual_mask.masked_fill(reason_casual_mask == 1, 0)
-        
+
             # Step 3: Pass the inputs through the text generation module
             logits_action, logits_reason = self.text_generation(
                 actual_visual_input,
                 action_generated,
                 reason_generated,
-                action_casual_mask, None,
-                reason_casual_mask, None
+                self.get_media_mask(T,action_T).to(actual_visual_input.device),
+                None,
+                self.get_media_mask(T,reason_T).to(actual_visual_input.device),
+                None
             )
 
             # Get the predicted next token (use greedy decoding here)

@@ -392,7 +392,7 @@ class TransformerEncoder(nn.Module):
         return BaseModelOutput(
             last_hidden_state=hidden_states, hidden_states=encoder_states, attentions=all_attentions
         )
-    
+
 class TransformerDecoder(nn.Module):
     """
     Transformer encoder consisting of `config.num_hidden_layers` self attention layers. Each layer is a
@@ -490,8 +490,8 @@ class TransformerDecoder(nn.Module):
         return BaseModelOutput(
             last_hidden_state=hidden_states, hidden_states=encoder_states, attentions=all_attentions
         )
-    
-class TransformerTextDecoder(nn.Module):
+
+class TransformerTextEncoder(nn.Module):
     """
     Transformer encoder consisting of `config.num_hidden_layers` self attention layers. Each layer is a
     [`MplugOwlVisionEncoderLayer`].
@@ -504,15 +504,13 @@ class TransformerTextDecoder(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
-        self.layers = nn.ModuleList([TransformerDecoderLayer(config) for _ in range(config.num_decoder_hidden_layers)])
+        self.layers = nn.ModuleList([TransformerEncoderLayer(config) for _ in range(config.num_text_hidden_layers)])
         self.gradient_checkpointing = False
 
     def forward(
         self,
-        input_q_embeds,
-        input_kv_embeds,
-        q_attention_mask: Optional[torch.Tensor] = None,
-        kv_attention_mask: Optional[torch.Tensor] = None,
+        inputs_embeds,
+        attention_mask: Optional[torch.Tensor] = None,
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
@@ -546,11 +544,10 @@ class TransformerTextDecoder(nn.Module):
         encoder_states = () if output_hidden_states else None
         all_attentions = () if output_attentions else None
 
-        # important here
-        hidden_states = input_q_embeds
-        for idx, decoder_layer in enumerate(self.layers):
+        hidden_states = inputs_embeds
+        for idx, encoder_layer in enumerate(self.layers):
             if output_hidden_states:
-                encoder_states = encoder_states + (input_kv_embeds,)
+                encoder_states = encoder_states + (hidden_states,)
             if self.gradient_checkpointing and self.training:
 
                 def create_custom_forward(module):
@@ -560,18 +557,14 @@ class TransformerTextDecoder(nn.Module):
                     return custom_forward
 
                 layer_outputs = torch.utils.checkpoint.checkpoint(
-                    create_custom_forward(decoder_layer),
+                    create_custom_forward(encoder_layer),
                     hidden_states,
-                    input_kv_embeds,
-                    q_attention_mask,
-                    kv_attention_mask,
+                    attention_mask,
                 )
             else:
-                layer_outputs = decoder_layer(
+                layer_outputs = encoder_layer(
                     hidden_states,
-                    input_kv_embeds,
-                    q_attention_mask,
-                    kv_attention_mask,
+                    attention_mask,
                     output_attentions=output_attentions,
                 )
 

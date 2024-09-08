@@ -52,7 +52,7 @@ def main(config):
         gt_reason_list += tokenizer.batch_decode(label_dict['reason'],skip_special_tokens=True)
 
         pred_outputs = model.generate(input_2d,input_3d,input_object,50,tokenizer.bos_token_id,tokenizer.eos_token_id)
-        pred_action_list += tokenizer.batch_decode(pred_outputs['action'],skip_special_tokens=True)
+        pred_action_list += ic(tokenizer.batch_decode(pred_outputs['action'],skip_special_tokens=True))
         pred_reason_list += tokenizer.batch_decode(pred_outputs['reason'],skip_special_tokens=True)
 
     _ = text_only_language_eval(pred_action_list,gt_action_list)
@@ -72,8 +72,8 @@ def main(config):
             'gt': gt_reason_list[i]
         })
 
-    json.dump(action_json, open("./checkpoints/outputs/action.json",mode='w'))
-    json.dump(reason_json, open("./checkpoints/outputs/reason.json",mode='w'))
+    json.dump(action_json, open("../checkpoints/outputs/action.json",mode='w'))
+    json.dump(reason_json, open("../checkpoints/outputs/reason.json",mode='w'))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -83,7 +83,7 @@ if __name__ == "__main__":
     parser.add_argument('--video_3d_path', type=str, default='/home/zeyu/work/deep_learning/extracted_dataset/bddx/S3D')
     parser.add_argument('--video_object_path', type=str, default='/home/zeyu/work/deep_learning/extracted_dataset/bddx/Fasterrcnn')
     parser.add_argument('--caption_file_path', type=str, default='/home/zeyu/mnt/drive0/dataset/driving/BDD-X/BDD-X-Dataset/bddx.json')
-    parser.add_argument('--batch_size', type=int, default=128)
+    parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--num_workers', type=int, default=8)
     parser.add_argument('--pin_memory', type=bool, default=True)
     parser.add_argument('--device', type=str, default="cuda:0")

@@ -45,7 +45,7 @@ python ../train.py \
     --logging_steps 1 \
     --logging_strategy "steps" \
     --lr_scheduler_type "cosine" \
-    --num_train_epochs 15 \
+    --num_train_epochs 3 \
     --output_dir ../checkpoints/checkpoint \
     --report_to tensorboard \
     --resume_from_checkpoint None \
@@ -61,5 +61,5 @@ python ../train.py \
     --weight_decay 0 \
     --warmup_ratio 0.03
 
-python ../test.py \
+python ../caption_test.py \
     --checkpoint "/home/zeyu/work/deep_learning/functional_files/trans_trainer/checkpoints/checkpoint"

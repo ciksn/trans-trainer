@@ -14,7 +14,7 @@ class custom_model_config(PretrainedConfig):
         encoder_hidden_size = 1024,
         intermediate_size = 2048,
         num_hidden_layers = 2,
-        num_decoder_hidden_layers = 4,
+        num_text_hidden_layers = 2,
         num_attention_heads = 32,
         dim_2d = 768,
         dim_3d = 1024,
@@ -22,9 +22,9 @@ class custom_model_config(PretrainedConfig):
         caption_seq_len = 40,
         video_seq_len = 32,
         num_learnable_queries = 32,
-        dropout_rate = 0.3,
+        dropout_rate = 0.5,
         layer_norm_eps = 1e-6,
-        label_smoothing = 0.0,
+        label_smoothing = 0.,
         **kwargs,
     ):
         self.vocab_size = vocab_size
@@ -32,7 +32,7 @@ class custom_model_config(PretrainedConfig):
         self.encoder_hidden_size = encoder_hidden_size
         self.intermediate_size = intermediate_size
         self.num_hidden_layers = num_hidden_layers
-        self.num_decoder_hidden_layers = num_decoder_hidden_layers
+        self.num_text_hidden_layers = num_text_hidden_layers
         self.num_attention_heads = num_attention_heads
         self.dim_2d = dim_2d
         self.dim_3d = dim_3d

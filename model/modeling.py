@@ -6,7 +6,6 @@ from transformers import PreTrainedModel
 from transformers.tokenization_utils import PreTrainedTokenizer
 from transformers.configuration_utils import PretrainedConfig
 from transformers.modeling_outputs import ModelOutput,CausalLMOutput
-from model.modeling_transformer import DownSampleMLP
 from model.modeling_modules import SceneLevel, ObjectLevel, MotionLevel, TextGeneration
 from model.configuration_model import custom_model_config
 from constants import IGNORE_INDEX
@@ -24,6 +23,8 @@ class custom_model(PreTrainedModel):
         Inherit from ModelOutput -> the first element must be loss
 
     """
+    config_class = custom_model_config
+
     def __init__(self, config: PretrainedConfig, tokenizer: PreTrainedTokenizer | None = None, *inputs, **kwargs):
         super(custom_model,self).__init__(config, *inputs, **kwargs)
         self.config = config
@@ -33,9 +34,7 @@ class custom_model(PreTrainedModel):
         self.ObjectLevel = ObjectLevel(config)
         self.MotionLevel = MotionLevel(config)
 
-        self.module_downsample = nn.Linear(3 * config.hidden_size, config.hidden_size)
-        self.input_downsample = nn.Linear(config.dim_2d + config.dim_3d + config.dim_object, config.hidden_size)
-        self.mixed_downsample = DownSampleMLP(2 * config.hidden_size, config.hidden_size,config)
+        self.module_downsample = nn.Linear(3 * config.hidden_size, config.hidden_size,config)
 
         self.text_generation = TextGeneration(config)
 
@@ -58,24 +57,28 @@ class custom_model(PreTrainedModel):
         motion_output = self.MotionLevel(scene_output,object_output)
 
         mixed_output = self.module_downsample(torch.cat((scene_output,object_output,motion_output),dim=-1))
-        mixed_feat = self.input_downsample(torch.cat((input_2d,input_3d,input_object),dim=-1))
-        actual_visual_input = self.mixed_downsample(torch.cat((mixed_output,mixed_feat),dim=-1))
-
+        actual_visual_input = mixed_output
 
         actual_action_ids = labels['action'][...,:-1]
         actual_reason_ids = labels['reason'][...,:-1]
         # attention_mask = input_pack['attention_mask']
-        T = actual_action_ids.size(-1)
 
-        casual_mask = torch.tril(torch.ones((1, T, T)))
-        casual_mask = casual_mask.masked_fill(casual_mask == 0, float('-inf'))
-        casual_mask = casual_mask.masked_fill(casual_mask == 1, 0).to(actual_action_ids.device)
+        action_T = actual_action_ids.size(-1)
+        action_casual_mask = torch.tril(torch.ones((1, action_T, action_T)))
+        action_casual_mask = action_casual_mask.masked_fill(action_casual_mask == 0, float('-inf'))
+        action_casual_mask = action_casual_mask.masked_fill(action_casual_mask == 1, 0).to(actual_action_ids.device)
         
+        reason_T = actual_reason_ids.size(-1)
+        reason_casual_mask = torch.tril(torch.ones((1, reason_T, reason_T)))
+        reason_casual_mask = reason_casual_mask.masked_fill(reason_casual_mask == 0, float('-inf'))
+        reason_casual_mask = reason_casual_mask.masked_fill(reason_casual_mask == 1, 0).to(actual_action_ids.device)
+
         logits_action, logits_reason = self.text_generation(
             actual_visual_input,
             actual_action_ids,actual_reason_ids,
-            casual_mask,None,casual_mask,None)
+            action_casual_mask,None,reason_casual_mask,None)
 
+        hypert = 0.3
         #TODO Trick: consider label smoothing here
         loss = None
         if labels is not None:
@@ -86,7 +89,7 @@ class custom_model(PreTrainedModel):
             shift_labels = shift_labels.view(-1)
 
             shift_labels = shift_labels.to(shift_logits.device)
-            loss = self.loss(shift_logits, shift_labels) / 2
+            loss = self.loss(shift_logits, shift_labels) * hypert
 
             shift_logits = logits_reason[..., :, :].contiguous()
             shift_labels = labels['reason'][..., 1:].contiguous()
@@ -95,7 +98,7 @@ class custom_model(PreTrainedModel):
             shift_labels = shift_labels.view(-1)
 
             shift_labels = shift_labels.to(shift_logits.device)
-            loss += self.loss(shift_logits, shift_labels) / 2
+            loss += self.loss(shift_logits, shift_labels) * (1-hypert)
 
         # ic(loss.item())
         #when computing loss, remember to distinct single batch when training or batch of list when eval
@@ -109,8 +112,82 @@ class custom_model(PreTrainedModel):
         )
     
     @torch.no_grad()
-    def generate(self,input_2d, input_3d, input_object):
-        pass
+    def generate(
+        self, 
+        input_2d: torch.Tensor, 
+        input_3d: torch.Tensor, 
+        input_object: torch.Tensor, 
+        max_length=50, 
+        bos_token_id=None, 
+        eos_token_id=None):
+        """
+        Autoregressive generation of action and reason captions.
+        Args:
+            input_3d: 3D scene input
+            input_object: Object-level input
+            max_length: Maximum length of the generated sequence
+            bos_token_id: ID of the beginning-of-sequence token
+            eos_token_id: ID of the end-of-sequence token
+        Returns:
+            Dict containing the generated captions (action and reason).
+        """
+        self.eval()
+        # Ensure BOS token is provided
+        if bos_token_id is None:
+            bos_token_id = self.tokenizer.bos_token_id
+        if eos_token_id is None:
+            eos_token_id = self.tokenizer.eos_token_id
+
+        # Step 1: Get the visual inputs by passing them through Scene, Object, and Motion levels
+        scene_output = self.SceneLevel(input_2d, input_3d)
+        object_output = self.ObjectLevel(input_object, scene_output)
+        motion_output = self.MotionLevel(scene_output, object_output)
+        mixed_output = self.module_downsample(torch.cat((scene_output, object_output, motion_output), dim=-1))
+        actual_visual_input = mixed_output
+
+        B = actual_visual_input.size(0)
+    
+        # Initialize with BOS token for action and reason
+        action_generated = torch.tensor([[bos_token_id]]).expand((B,1)).to(actual_visual_input.device)
+        reason_generated = torch.tensor([[bos_token_id]]).expand((B,1)).to(actual_visual_input.device)
+        # Step 2: Iteratively generate tokens
+        for step in range(max_length):
+            # Apply causal masks for autoregressive generation
+            action_T = action_generated.size(1)
+            action_casual_mask = torch.tril(torch.ones((1, action_T, action_T), device=action_generated.device))
+            action_casual_mask = action_casual_mask.masked_fill(action_casual_mask == 0, float('-inf'))
+            action_casual_mask = action_casual_mask.masked_fill(action_casual_mask == 1, 0)
+
+            reason_T = reason_generated.size(1)
+            reason_casual_mask = torch.tril(torch.ones((1, reason_T, reason_T), device=reason_generated.device))
+            reason_casual_mask = reason_casual_mask.masked_fill(reason_casual_mask == 0, float('-inf'))
+            reason_casual_mask = reason_casual_mask.masked_fill(reason_casual_mask == 1, 0)
+        
+            # Step 3: Pass the inputs through the text generation module
+            logits_action, logits_reason = self.text_generation(
+                actual_visual_input,
+                action_generated,
+                reason_generated,
+                action_casual_mask, None,
+                reason_casual_mask, None
+            )
+
+            # Get the predicted next token (use greedy decoding here)
+            next_action_token = torch.argmax(logits_action[:, -1, :], dim=-1)
+            next_reason_token = torch.argmax(logits_reason[:, -1, :], dim=-1)
+            # Append predicted token to the generated sequence
+            action_generated = torch.cat([action_generated, next_action_token.unsqueeze(-1)], dim=-1)
+            reason_generated = torch.cat([reason_generated, next_reason_token.unsqueeze(-1)], dim=-1)
+
+            # Step 4: Check for EOS token to terminate early
+            if (next_action_token == eos_token_id).all() and (next_reason_token == eos_token_id).all():
+                break
+
+        return {
+            "action": action_generated,
+            "reason": reason_generated,
+        }
+
 
 if __name__ == "__main__":
     device = "cuda:0"

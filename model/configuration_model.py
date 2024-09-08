@@ -9,19 +9,20 @@ class custom_model_config(PretrainedConfig):
     model_type = "custom_model" # model name
 
     def __init__(self,
-        vocab_size = 32000,
+        vocab_size = 3000,
         hidden_size = 1024,
         encoder_hidden_size = 1024,
         intermediate_size = 2048,
         num_hidden_layers = 2,
-        num_attention_heads = 8,
+        num_decoder_hidden_layers = 4,
+        num_attention_heads = 32,
         dim_2d = 768,
         dim_3d = 1024,
         dim_object = 2048,
-        caption_seq_len = 30,
+        caption_seq_len = 40,
         video_seq_len = 32,
         num_learnable_queries = 32,
-        attention_probs_dropout_prob = 0.5,
+        dropout_rate = 0.3,
         layer_norm_eps = 1e-6,
         label_smoothing = 0.0,
         **kwargs,
@@ -31,6 +32,7 @@ class custom_model_config(PretrainedConfig):
         self.encoder_hidden_size = encoder_hidden_size
         self.intermediate_size = intermediate_size
         self.num_hidden_layers = num_hidden_layers
+        self.num_decoder_hidden_layers = num_decoder_hidden_layers
         self.num_attention_heads = num_attention_heads
         self.dim_2d = dim_2d
         self.dim_3d = dim_3d
@@ -38,7 +40,7 @@ class custom_model_config(PretrainedConfig):
         self.caption_seq_len = caption_seq_len
         self.video_seq_len = video_seq_len
         self.num_learnable_queries = num_learnable_queries
-        self.attention_probs_dropout_prob = attention_probs_dropout_prob
+        self.dropout_rate = dropout_rate
         self.layer_norm_eps = layer_norm_eps
         self.label_smoothing = label_smoothing
         super().__init__(**kwargs)

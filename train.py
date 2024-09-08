@@ -29,6 +29,7 @@ from dataset.datasets import DATASET_REGISTRY,COLLATE_REGISTRY
 from model.modeling import custom_model
 from model.configuration_model import custom_model_config
 from eval.compute_metric import multireference_text_metric
+from constants import IGNORE_INDEX
 
 from icecream import ic
 
@@ -178,10 +179,10 @@ def build_data_module(data_args,tokenzier:PreTrainedTokenizer = None) -> Dict:
     """
     Get dataset and collator function for training
     """
-    train_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args, "train", tokenzier)
-    eval_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args, "eval", tokenzier)
-    test_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args, "test", tokenzier)
-    collator = COLLATE_REGISTRY.get(data_args.dataset_name+"_collate_fn")()
+    train_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args, "train")
+    eval_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args, "eval")
+    test_dataset = DATASET_REGISTRY.get(data_args.dataset_name)(data_args, "test")
+    collator = COLLATE_REGISTRY.get(data_args.dataset_name+"_collate_fn")(tokenzier)
     return dict(
         train_dataset = train_dataset, # TODO if there needs quote
         eval_dataset = eval_dataset,
@@ -232,7 +233,7 @@ def train():
             cache_dir=training_args.cache_dir,
             model_max_length=data_args.caption_seq_len,
             padding_side="right",
-            use_fast=False,
+            # use_fast=False,
         )
     else:
         tokenizer = None

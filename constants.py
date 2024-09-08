@@ -1,2 +1,2 @@
 # Model Constants
-IGNORE_INDEX = 0
+IGNORE_INDEX=0

@@ -18,11 +18,14 @@ class multireference_text_metric:
         logits, labels = eval_input
         pred_action = np.argmax(logits['action'],axis=2) # (B,T,V)
         pred_action = self.tokenizer.batch_decode(pred_action,skip_special_tokens=True)
+
+        labels['action'] = np.where(labels['action'] != -100,labels['action'],self.tokenizer.pad_token_id)
         labels_action = self.tokenizer.batch_decode(labels['action'],skip_special_tokens=True)
         output_action = text_only_language_eval(pred_action,labels_action)
 
         pred_reason = np.argmax(logits['reason'],axis=2) # (B,T,V)
         pred_reason = self.tokenizer.batch_decode(pred_reason,skip_special_tokens=True)
+        labels['reason'] = np.where(labels['reason'] != -100,labels['reason'],self.tokenizer.pad_token_id)
         labels_reason = self.tokenizer.batch_decode(labels['reason'],skip_special_tokens=True)
         output_reason = text_only_language_eval(pred_reason,labels_reason)
 
@@ -44,6 +47,7 @@ class multireference_text_metric:
                 'pred': pred_reason[i],
                 'gt': labels_reason[i]
             })
-        json.dump(action_json,open("../checkpoints/outputs/action.json",mode='w+'))
-        json.dump(reason_json,open("../checkpoints/outputs/reason.json",mode='w+'))
+            
+        # json.dump(action_json,open("../checkpoints/outputs/action.json",mode='w+'))
+        # json.dump(reason_json,open("../checkpoints/outputs/reason.json",mode='w+'))
         return all_output

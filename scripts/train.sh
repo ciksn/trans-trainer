@@ -1,8 +1,9 @@
 #!/bin/bash
 export MODEL_LOAD='/home/zeyu/work/deep_learning/functional_files/trans_trainer/checkpoints'
 export CONFIG_LOAD='/home/zeyu/work/deep_learning/functional_files/trans_trainer/checkpoints'
-# export TOKENIZER_LOAD='/home/zeyu/.cache/huggingface/hub/models--bert-base-uncased/snapshots/86b5e0934494bd15c9632b12f734a8a67f723594'
-export TOKENIZER_LOAD='/home/zeyu/mnt/drive0/dataset/driving/BDD-X/BDD-X-Dataset/tokenizer'
+export TOKENIZER_LOAD='/home/zeyu/.cache/huggingface/hub/models--bert-base-uncased/snapshots/86b5e0934494bd15c9632b12f734a8a67f723594'
+# export TOKENIZER_LOAD='/home/zeyu/mnt/drive0/dataset/driving/BDD-X/BDD-X-Dataset/tokenizer'
+
 export CACHE_DIR='/home/zeyu/.cache/huggingface/hub/'
 
 export DATASET_NAME="bddx_dataset"
@@ -45,7 +46,7 @@ python ../train.py \
     --logging_steps 1 \
     --logging_strategy "steps" \
     --lr_scheduler_type "cosine" \
-    --num_train_epochs 3 \
+    --num_train_epochs 5 \
     --output_dir ../checkpoints/checkpoint \
     --report_to tensorboard \
     --resume_from_checkpoint None \

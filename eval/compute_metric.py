@@ -48,6 +48,6 @@ class multireference_text_metric:
                 'gt': labels_reason[i]
             })
             
-        json.dump(action_json,open("../checkpoints/outputs/eval_action.json",mode='w+'))
-        json.dump(reason_json,open("../checkpoints/outputs/eval_reason.json",mode='w+'))
+        json.dump(action_json,open("../checkpoints/outputs/eval_action.json",mode='w'))
+        json.dump(reason_json,open("../checkpoints/outputs/eval_reason.json",mode='w'))
         return all_output

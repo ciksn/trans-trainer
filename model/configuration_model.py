@@ -9,7 +9,7 @@ class custom_model_config(PretrainedConfig):
     model_type = "custom_model" # model name
 
     def __init__(self,
-        vocab_size = 3000,
+        vocab_size = 30522,
         hidden_size = 1024,
         encoder_hidden_size = 1024,
         intermediate_size = 2048,

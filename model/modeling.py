@@ -29,7 +29,7 @@ class custom_model(PreTrainedModel):
         super(custom_model,self).__init__(config, *inputs, **kwargs)
         self.config = config
         self.tokenizer = tokenizer
-        self.loss = nn.CrossEntropyLoss(ignore_index=IGNORE_INDEX,label_smoothing=config.label_smoothing)
+        self.loss = nn.CrossEntropyLoss(ignore_index=self.tokenizer.bos_token_id,label_smoothing=config.label_smoothing)
         self.SceneLevel = SceneLevel(config)
         self.ObjectLevel = ObjectLevel(config)
         self.MotionLevel = MotionLevel(config)
@@ -64,10 +64,9 @@ class custom_model(PreTrainedModel):
         Output is a Dict
         """
         scene_output = self.SceneLevel(input_2d, input_3d)
-        # object_output = self.ObjectLevel(input_object, scene_output)
-        # motion_output = self.MotionLevel(scene_output,object_output)
-        # actual_visual_input = self.module_downsample(torch.cat((scene_output,object_output,motion_output),dim=-1))
-        actual_visual_input = scene_output
+        object_output = self.ObjectLevel(input_object, scene_output)
+        motion_output = self.MotionLevel(scene_output,object_output)
+        actual_visual_input = self.module_downsample(torch.cat((scene_output,object_output,motion_output),dim=-1))
 
         actual_action_ids = labels['action'][...,:-1]
         actual_reason_ids = labels['reason'][...,:-1]
@@ -84,14 +83,13 @@ class custom_model(PreTrainedModel):
             None,
             self.get_media_mask(T,reason_T).to(actual_visual_input.device),
             None)
-
-        hypert = 0.2
+        
+        hypert = 0.1
         #TODO Trick: consider label smoothing here
         loss = None
         if labels is not None:
             shift_logits = logits_action[..., :, :].contiguous()
             shift_labels = labels['action'][..., 1:].contiguous()
-
             shift_logits = shift_logits.view(-1, self.config.vocab_size)
             shift_labels = shift_labels.view(-1)
 
@@ -147,11 +145,9 @@ class custom_model(PreTrainedModel):
 
         # Step 1: Get the visual inputs by passing them through Scene, Object, and Motion levels
         scene_output = self.SceneLevel(input_2d, input_3d)
-        # object_output = self.ObjectLevel(input_object, scene_output)
-        # motion_output = self.MotionLevel(scene_output,object_output)
-        # actual_visual_input = self.module_downsample(torch.cat((scene_output,object_output,motion_output),dim=-1))
-        actual_visual_input = scene_output
-
+        object_output = self.ObjectLevel(input_object, scene_output)
+        motion_output = self.MotionLevel(scene_output,object_output)
+        actual_visual_input = self.module_downsample(torch.cat((scene_output,object_output,motion_output),dim=-1))
 
         B,T,H = actual_visual_input.size()
     

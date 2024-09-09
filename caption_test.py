@@ -52,7 +52,7 @@ def main(config):
         gt_reason_list += tokenizer.batch_decode(label_dict['reason'],skip_special_tokens=True)
 
         pred_outputs = model.generate(input_2d,input_3d,input_object,50,tokenizer.bos_token_id,tokenizer.eos_token_id)
-        pred_action_list += ic(tokenizer.batch_decode(pred_outputs['action'],skip_special_tokens=True))
+        pred_action_list += tokenizer.batch_decode(pred_outputs['action'],skip_special_tokens=True)
         pred_reason_list += tokenizer.batch_decode(pred_outputs['reason'],skip_special_tokens=True)
 
     _ = text_only_language_eval(pred_action_list,gt_action_list)

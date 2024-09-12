@@ -1,5 +1,6 @@
 import numpy as np
 import decord
+from PIL import Image
 from torchvision import transforms
 from decord import VideoReader, cpu
 decord.bridge.set_bridge("torch")
@@ -45,3 +46,14 @@ def load_video(video_path, num_segments=8,
         return frames, msg
     else:
         return frames
+
+def load_image(path_like):
+    """
+    Support for multiple image path input
+    """
+    if isinstance(path_like, str):
+        try:
+            image = Image.open(path_like).convert('RGB')
+        except:
+            image = None
+    return image

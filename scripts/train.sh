@@ -1,33 +1,30 @@
 #!/bin/bash
 export MODEL_LOAD='/home/zeyu/work/deep_learning/functional_files/trans_trainer/checkpoints'
 export CONFIG_LOAD='/home/zeyu/work/deep_learning/functional_files/trans_trainer/checkpoints'
-export TOKENIZER_LOAD='/home/zeyu/.cache/huggingface/hub/models--bert-base-uncased/snapshots/86b5e0934494bd15c9632b12f734a8a67f723594'
-# export TOKENIZER_LOAD='/home/zeyu/mnt/drive0/dataset/driving/BDD-X/BDD-X-Dataset/tokenizer'
+export TOKENIZER_LOAD='TinyLlama/TinyLlama_v1.1'
+
+export VISUAL_BACKBONE='openai/clip-vit-large-patch14'
+export LANGUAGE_MODEL='TinyLlama/TinyLlama_v1.1'
 
 export CACHE_DIR='/home/zeyu/.cache/huggingface/hub/'
 
-export DATASET_NAME="bddx_dataset"
-export CAPTION_FILE_PATH="/home/zeyu/mnt/drive0/dataset/driving/BDD-X/BDD-X-Dataset/bddx.json"
-export VIDEO_2D_PATH="/home/zeyu/work/deep_learning/extracted_dataset/bddx/CLIP-ViT_L14"
-export VIDEO_3D_PATH="/home/zeyu/work/deep_learning/extracted_dataset/bddx/S3D"
-export VIDEO_OBJECT_PATH="/home/zeyu/work/deep_learning/extracted_dataset/bddx/Fasterrcnn"
+export DATASET_NAME="drama_dataset"
 
 python ../train.py \
     --load_from_config False \
     --load_from_pretrained False \
     --model_name_or_path $MODEL_LOAD \
     --config_name_or_path $CONFIG_LOAD \
+    --visual_backbone $VISUAL_BACKBONE \
+    --language_model $LANGUAGE_MODEL \
     --need_tokenizer True \
+    --tokenizer_from_pretrained False \
     --tokenizer_name_or_path $TOKENIZER_LOAD \
+    --tokenizer_max_length 512 \
     --cache_dir $CACHE_DIR \
     --version v1 \
     --dataset_name $DATASET_NAME \
-    --caption_file_path $CAPTION_FILE_PATH \
-    --video_2d_path $VIDEO_2D_PATH \
-    --video_3d_path $VIDEO_3D_PATH \
-    --video_object_path $VIDEO_OBJECT_PATH \
-    --caption_seq_len 40 \
-    --video_seq_len 32 \
+    --dataset_input_files '/home/zeyu/mnt/drive0/dataset/driving/drama/processed' \
     --status "pretrain" \
     --optim "adamw_torch" \
     --load_best_model_at_end True \
@@ -56,11 +53,11 @@ python ../train.py \
     --metric_for_best_model "action/CIDEr" \
     --seed 42 \
     --gradient_accumulation_steps 8 \
-    --per_device_train_batch_size 16 \
-    --per_device_eval_batch_size 8 \
-    --eval_accumulation_steps 16 \
+    --per_device_train_batch_size 8 \
+    --per_device_eval_batch_size 4 \
+    --eval_accumulation_steps 4 \
     --weight_decay 0 \
     --warmup_ratio 0.03
 
-python ../caption_test.py \
-    --checkpoint "/home/zeyu/work/deep_learning/functional_files/trans_trainer/checkpoints/checkpoint"
+# python ../caption_test.py \
+#     --checkpoint "/home/zeyu/work/deep_learning/functional_files/trans_trainer/checkpoints/checkpoint"

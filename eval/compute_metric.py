@@ -14,40 +14,14 @@ class multireference_text_metric:
         """
         set to be called as a function
         """
-        all_output = {}
         logits, labels = eval_input
-        pred_action = np.argmax(logits['action'],axis=2) # (B,T,V)
-        pred_action = self.tokenizer.batch_decode(pred_action,skip_special_tokens=True)
+        pred = np.argmax(logits,axis=2) # (B,T,V)
+        pred = self.tokenizer.batch_decode(pred,skip_special_tokens=True)
 
-        labels['action'] = np.where(labels['action'] != -100,labels['action'],self.tokenizer.pad_token_id)
-        labels_action = self.tokenizer.batch_decode(labels['action'],skip_special_tokens=True)
-        output_action = text_only_language_eval(pred_action,labels_action)
+        labels = np.where(labels != -100,labels,self.tokenizer.pad_token_id)
+        labels = self.tokenizer.batch_decode(labels,skip_special_tokens=True)
+        output = text_only_language_eval(pred,labels)
 
-        pred_reason = np.argmax(logits['reason'],axis=2) # (B,T,V)
-        pred_reason = self.tokenizer.batch_decode(pred_reason,skip_special_tokens=True)
-        labels['reason'] = np.where(labels['reason'] != -100,labels['reason'],self.tokenizer.pad_token_id)
-        labels_reason = self.tokenizer.batch_decode(labels['reason'],skip_special_tokens=True)
-        output_reason = text_only_language_eval(pred_reason,labels_reason)
+        json.dump(pred,open("../checkpoints/outputs/eval.json",mode='w'))
 
-        for key in output_action.keys():
-            all_output["action/"+key] = output_action[key]
-        for key in output_reason.keys():
-            all_output["reason/"+key] = output_reason[key]
-
-        action_json = []
-        for i in range(len(pred_action)):
-            action_json.append({
-                'pred': pred_action[i],
-                'gt': labels_action[i]
-            })
-        
-        reason_json = []
-        for i in range(len(pred_reason)):
-            reason_json.append({
-                'pred': pred_reason[i],
-                'gt': labels_reason[i]
-            })
-            
-        json.dump(action_json,open("../checkpoints/outputs/eval_action.json",mode='w'))
-        json.dump(reason_json,open("../checkpoints/outputs/eval_reason.json",mode='w'))
-        return all_output
+        return output

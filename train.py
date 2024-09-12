@@ -25,9 +25,10 @@ import logging
 import transformers
 
 from train.model_trainner import custom_trainer
-from dataset.datasets import DATASET_REGISTRY,COLLATE_REGISTRY
-from model.modeling import custom_model
-from model.configuration_model import custom_model_config
+from dataset.datasets import DATASET_REGISTRY, COLLATE_REGISTRY
+from model.modeling import MAIN
+from model.build import build_model,build_config,build_tokenizer
+from model.configuration_model import MAINconfig
 from eval.compute_metric import multireference_text_metric
 from constants import IGNORE_INDEX
 
@@ -110,7 +111,11 @@ class ModelArguments:
     model_name_or_path: Optional[str] = field(default="")
     config_name_or_path: Optional[str] = field(default="")
     need_tokenizer: Optional[bool] = field(default=False)
+    tokenizer_from_pretrained: Optional[bool] = field(default=False)
     tokenizer_name_or_path: Optional[str] = field(default="")
+    tokenizer_max_length: Optional[int] = field(default="")
+    visual_backbone: Optional[str] = field(default="")
+    language_model: Optional[str] = field(default="")
     version: Optional[str] = field(default="v0")
 
 @dataclass
@@ -119,12 +124,7 @@ class DataArguments:
     Customizable for train/val/test data Arguments
     """
     dataset_name: str = field(default=None,metadata={"help":"The dataset used for training, need to be resigtered in dataset"})
-    caption_seq_len: int = field(default='',metadata={"help":""})
-    video_seq_len: int = field(default='',metadata={"help":""})
-    caption_file_path: str = field(default='',metadata={"help":""})
-    video_2d_path: str = field(default='',metadata={"help":""})
-    video_3d_path: str = field(default='',metadata={"help":""})
-    video_object_path: str = field(default='',metadata={"help":""})
+    dataset_input_files: str = field(default='',metadata={"help":""})
 
 @dataclass
 class TrainingArguments(transformers.TrainingArguments):
@@ -195,7 +195,9 @@ def train():
 
     parser = transformers.HfArgumentParser(
         (ModelArguments, DataArguments, TrainingArguments)) # Auto assgin args based on class field 
-    model_args, data_args, training_args = parser.parse_args_into_dataclasses() 
+    model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+
+    #TODO process multiple input dataset here for data_args
 
     local_rank = training_args.local_rank
     compute_dtype = (torch.float16 if training_args.fp16 else (torch.bfloat16 if training_args.bf16 else torch.float32))
@@ -220,36 +222,41 @@ def train():
         ))
 
     if training_args.load_from_config:
-        config = custom_model_config.from_pretrained(
+        config = MAINconfig.from_pretrained(
             model_args.config_name_or_path,
             cache_dir=model_args.cache_dir)
     else:
-        config = custom_model_config()
-        config.save_pretrained(model_args.config_name_or_path)
+        config = build_config(model_args)
+        # config.save_pretrained(model_args.config_name_or_path)
 
-    if model_args.need_tokenizer:
+    if model_args.need_tokenizer and model_args.tokenizer_from_pretrained:
         tokenizer = transformers.AutoTokenizer.from_pretrained(
             model_args.tokenizer_name_or_path,
             cache_dir=training_args.cache_dir,
-            model_max_length=data_args.caption_seq_len,
+            model_max_length=model_args.tokenizer_max_length,
             padding_side="right",
             # use_fast=False,
         )
     else:
-        tokenizer = None
+        tokenizer = build_tokenizer(model_args)
 
     if training_args.load_from_pretrained:
-        model = custom_model.from_pretrained(
+        model = MAIN.from_pretrained(
             model_args.model_name_or_path,
             config=config,
             cache_dir=training_args.cache_dir,
             **bnb_model_from_pretrained_args
         )
     else:
-        model = custom_model(config, tokenizer)
+        model = build_model(model_args, config, tokenizer)
+        # model.save_pretrained(model_args.model_name_or_path)
 
     #TODO if the model need to freeze parameters
     # Please list here
+    if training_args.status == "pretrain":
+        model.freeze_language()
+    else:
+        model.unfreeze_language()
 
     if training_args.bits in [4, 8]:
         from peft import prepare_model_for_kbit_training
@@ -264,12 +271,12 @@ def train():
                 output.requires_grad_(True)
             model.get_input_embeddings().register_forward_hook(make_inputs_require_grad)
 
-    if training_args.lora_enable:
+    if training_args.lora_enable and training_args.status != "pretrain":
         from peft import LoraConfig, get_peft_model
         lora_config = LoraConfig(
             r=training_args.lora_r,
             lora_alpha=training_args.lora_alpha,
-            target_modules=find_all_linear_names(model),
+            target_modules=find_all_linear_names(model.language_model),
             lora_dropout=training_args.lora_dropout,
             bias=training_args.lora_bias,
             task_type="CAUSAL_LM",

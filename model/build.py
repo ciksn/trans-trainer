@@ -8,11 +8,11 @@ from .modeling_abstractor import MAINVisualAbstractorModel
 
 from icecream import ic
 
-def build_model(model_args, model_config: MAINconfig, tokenizer):
-    clip_model = CLIPModel.from_pretrained(model_args.visual_backbone, config=model_config.visual_backbone_config)
-    abstractor = MAINVisualAbstractorModel(model_config.visual_abstractor_config, model_config.language_model_config.hidden_size)
-    language_model = LlamaForCausalLM.from_pretrained(model_args.language_model, config=model_config.language_model_config)
-    model = MAIN(clip_model.vision_model, abstractor, None, language_model, model_config,tokenizer)
+def build_model(model_args, model_config: MAINconfig):
+    # for training time
+    model = MAIN(model_config)
+    model.language_model = LlamaForCausalLM.from_pretrained(model_args.language_model, config=model_config.language_model_config)
+    model.visual_backbone = CLIPModel.from_pretrained(model_args.visual_backbone, config=model_config.visual_backbone_config).vision_model
     return model
 
 def build_tokenizer(model_args):
@@ -24,9 +24,17 @@ def build_tokenizer(model_args):
     return tokenizer
 
 def build_config(model_args):
-    visual_backbone_config = CLIPConfig.from_pretrained(model_args.visual_backbone)
-    visual_abstractor_config = MAINAbstractorConfig()
-    multi_task_config = MAINMultiTaskConfig()
-    llama_config = LlamaConfig.from_pretrained(model_args.language_model)
-    config = MAINconfig(64,visual_backbone_config,visual_abstractor_config,multi_task_config,llama_config)
+    config = MAINconfig(
+        64,
+        2,
+        None,
+        None,
+        None,
+        None,
+    )
+    config.visual_backbone_config = CLIPConfig.from_pretrained(model_args.visual_backbone)
+    config.language_model_config = LlamaConfig.from_pretrained(model_args.language_model)
     return config
+
+if __name__=="__main__":
+    pass

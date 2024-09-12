@@ -8,9 +8,9 @@ from typing import Dict
 from torch.utils.data import DataLoader
 from transformers import AutoModel, AutoConfig, AutoTokenizer, PreTrainedTokenizer
 from dataset.datasets import DATASET_REGISTRY,COLLATE_REGISTRY
+from model.configuration_model import MAINconfig
+from model.modeling import MAIN
 from eval.compute_metric import text_only_language_eval
-from model.modeling import custom_model
-from model.configuration_model import custom_model_config
 
 from icecream import ic
 
@@ -31,58 +31,57 @@ def build_test_data_module(data_args,tokenzier:PreTrainedTokenizer = None) -> Di
 # TODO 
 # Multi-GPU Support 
 def main(config):
-    tokenizer = AutoTokenizer.from_pretrained(config.checkpoint)
-    model_config = custom_model_config.from_pretrained(config.checkpoint)
-    model = custom_model.from_pretrained(config.checkpoint,config=model_config)
+    tokenizer = AutoTokenizer.from_pretrained("TinyLlama/TinyLlama_v1.1",add_eos_token=True)
+    tokenizer.pad_token = tokenizer.eos_token
+    model_config = MAINconfig.from_pretrained(config.checkpoint)
+    model = MAIN.from_pretrained(pretrained_model_name_or_path=config.checkpoint,config=model_config)
     model.to(config.device)
 
     test_dataloader = build_test_data_module(config,tokenizer)
 
-    pred_action_list = []
-    pred_reason_list = []
-    gt_action_list = []
-    gt_reason_list = []
-    for batch in tqdm(test_dataloader):
-        input_2d = batch['input_2d'].to(config.device)
-        input_3d = batch['input_3d'].to(config.device)
-        input_object = batch['input_object'].to(config.device)
+    pred_list = []
+    gt_list = []
+    for batched in tqdm(test_dataloader):
+        pixel_values = batched['pixel_values'].to(config.device)
+        attention_mask = batched['attention_mask'].to(config.device)
+        labels = batched['labels']
 
-        label_dict = batch['labels']
-        gt_action_list += tokenizer.batch_decode(label_dict['action'],skip_special_tokens=True)
-        gt_reason_list += tokenizer.batch_decode(label_dict['reason'],skip_special_tokens=True)
+        caption = labels['caption']
+        gt_list += tokenizer.batch_decode(caption,skip_special_tokens=True)
 
-        pred_outputs = model.generate(input_2d,input_3d,input_object,50,tokenizer.bos_token_id,tokenizer.eos_token_id)
-        pred_action_list += tokenizer.batch_decode(pred_outputs['action'],skip_special_tokens=True)
-        pred_reason_list += tokenizer.batch_decode(pred_outputs['reason'],skip_special_tokens=True)
+        args = {
+            'max_length': 30,
+            'num_beams': 5,
+            'temperature': 0.7,
+            'top_k': 50,
+            'top_p': 0.9,
+            'do_sample': True,
+        }
 
-    _ = text_only_language_eval(pred_action_list,gt_action_list)
-    _ = text_only_language_eval(pred_reason_list,gt_reason_list)
+        pred_outputs = model.generate(
+            pixel_values, 
+            attention_mask,
+            **args
+        )
 
-    action_json = []
-    for i in range(len(pred_action_list)):
-        action_json.append({
-            'pred': pred_action_list[i],
-            'gt': gt_action_list[i]
+        pred_list += tokenizer.batch_decode(pred_outputs,skip_special_tokens=True)
+
+    _ = text_only_language_eval(pred_list,gt_list)
+
+    json_list = []
+    for i in range(len(pred_list)):
+        json_list.append({
+            'pred': pred_list[i],
+            'gt': gt_list[i]
         })
 
-    reason_json = []
-    for i in range(len(pred_reason_list)):
-        reason_json.append({
-            'pred': pred_reason_list[i],
-            'gt': gt_reason_list[i]
-        })
-
-    json.dump(action_json, open("../checkpoints/outputs/action.json",mode='w'))
-    json.dump(reason_json, open("../checkpoints/outputs/reason.json",mode='w'))
+    json.dump(json_list, open("../checkpoints/outputs/test.json",mode='w'))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--checkpoint', type=str, default='/home/zeyu/work/deep_learning/functional_files/trans_trainer/checkpoints/checkpoint')
-    parser.add_argument('--dataset_name', type=str, default='bddx_dataset')
-    parser.add_argument('--video_2d_path', type=str, default='/home/zeyu/work/deep_learning/extracted_dataset/bddx/CLIP-ViT_L14')
-    parser.add_argument('--video_3d_path', type=str, default='/home/zeyu/work/deep_learning/extracted_dataset/bddx/S3D')
-    parser.add_argument('--video_object_path', type=str, default='/home/zeyu/work/deep_learning/extracted_dataset/bddx/Fasterrcnn')
-    parser.add_argument('--caption_file_path', type=str, default='/home/zeyu/mnt/drive0/dataset/driving/BDD-X/BDD-X-Dataset/bddx.json')
+    parser.add_argument('--dataset_name', type=str, default='drama_dataset')
+    parser.add_argument('--dataset_input_files', type=str, default='/home/zeyu/mnt/drive0/dataset/driving/drama/processed')
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--num_workers', type=int, default=8)
     parser.add_argument('--pin_memory', type=bool, default=True)

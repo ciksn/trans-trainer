@@ -80,33 +80,42 @@ class MAINconfig(PretrainedConfig):
 
     def __init__(self,
         num_query_tokens: int = 64,
-        backbone_config: CLIPConfig = None,
-        visual_abstractor_config: PretrainedConfig = None,
-        multi_task_config: PretrainedConfig = None,
-        language_model_config: LlamaConfig = None,
+        pad_token_id = 2,
+        visual_backbone_config = None,
+        visual_abstractor_config = None,
+        multi_task_config = None,
+        language_model_config = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.num_query_tokens = num_query_tokens
+        self.pad_token_id = pad_token_id
 
-        self.visual_backbone_config = backbone_config
-        self.visual_abstractor_config = visual_abstractor_config
-        self.multi_task_config = multi_task_config
-        self.language_model_config = language_model_config
+        if visual_backbone_config is None:
+            visual_backbone_config = CLIPConfig().to_dict()
+        
+        if visual_abstractor_config is None:
+            visual_abstractor_config = MAINAbstractorConfig().to_dict()
+
+        if multi_task_config is None:
+            multi_task_config = MAINMultiTaskConfig().to_dict()
+
+        if language_model_config is None:
+            language_model_config = LlamaConfig(pad_token_id=2).to_dict()
+
+        self.visual_backbone_config =  CLIPConfig(**visual_backbone_config)
+        self.visual_abstractor_config = MAINAbstractorConfig(**visual_abstractor_config)
+        self.multi_task_config = MAINMultiTaskConfig(**multi_task_config)
+        self.language_model_config = LlamaConfig(**language_model_config)
 
     def to_dict(self) -> Dict[str, Any]:
         output = copy.deepcopy(self.__dict__)
         output["model_type"] = self.__class__.model_type
-        if self.visual_backbone_config is not None:
-            output['visual_backbone_config'] = self.visual_backbone_config.to_dict()
-        if self.visual_abstractor_config is not None:
-            output['visual_abstractor_config'] = self.visual_abstractor_config.to_dict()
-        if self.multi_task_config is not None:
-            output['multi_task_config'] = self.multi_task_config.to_dict()
-        if self.language_model_config is not None:
-            output['language_model_config'] = self.language_model_config.to_dict()
+        output['visual_backbone_config'] = self.visual_backbone_config.to_dict()
+        output['visual_abstractor_config'] = self.visual_abstractor_config.to_dict()
+        output['multi_task_config'] = self.multi_task_config.to_dict()
+        output['language_model_config'] = self.language_model_config.to_dict()
         return output
-
 
 if __name__ == "__main__":
     a = LlamaConfig().to_dict()

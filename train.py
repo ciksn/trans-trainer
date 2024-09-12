@@ -227,7 +227,7 @@ def train():
             cache_dir=model_args.cache_dir)
     else:
         config = build_config(model_args)
-        # config.save_pretrained(model_args.config_name_or_path)
+        config.save_pretrained(model_args.config_name_or_path)
 
     if model_args.need_tokenizer and model_args.tokenizer_from_pretrained:
         tokenizer = transformers.AutoTokenizer.from_pretrained(
@@ -248,8 +248,8 @@ def train():
             **bnb_model_from_pretrained_args
         )
     else:
-        model = build_model(model_args, config, tokenizer)
-        # model.save_pretrained(model_args.model_name_or_path)
+        model = build_model(model_args, config)
+        model.save_pretrained(model_args.model_name_or_path)
 
     #TODO if the model need to freeze parameters
     # Please list here

@@ -43,14 +43,14 @@ python ../train.py \
     --logging_steps 1 \
     --logging_strategy "steps" \
     --lr_scheduler_type "cosine" \
-    --num_train_epochs 5 \
+    --num_train_epochs 3 \
     --output_dir ../checkpoints/checkpoint \
     --report_to tensorboard \
     --resume_from_checkpoint None \
     --save_strategy "epoch" \
     --save_steps 30 \
     --save_total_limit 1 \
-    --metric_for_best_model "action/CIDEr" \
+    --metric_for_best_model "CIDEr" \
     --seed 42 \
     --gradient_accumulation_steps 8 \
     --per_device_train_batch_size 8 \

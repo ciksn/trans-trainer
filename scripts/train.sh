@@ -59,5 +59,5 @@ python ../train.py \
     --weight_decay 0 \
     --warmup_ratio 0.03
 
-# python ../caption_test.py \
-#     --checkpoint "/home/zeyu/work/deep_learning/functional_files/trans_trainer/checkpoints/checkpoint"
+python ../caption_test.py \
+    --checkpoint "/home/zeyu/work/deep_learning/functional_files/trans_trainer/checkpoints/checkpoint"

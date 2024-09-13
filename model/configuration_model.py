@@ -80,6 +80,7 @@ class MAINconfig(PretrainedConfig):
 
     def __init__(self,
         num_query_tokens: int = 64,
+        bos_token_id = 1,
         pad_token_id = 2,
         visual_backbone_config = None,
         visual_abstractor_config = None,
@@ -89,6 +90,7 @@ class MAINconfig(PretrainedConfig):
     ):
         super().__init__(**kwargs)
         self.num_query_tokens = num_query_tokens
+        self.bos_token_id = bos_token_id
         self.pad_token_id = pad_token_id
 
         if visual_backbone_config is None:

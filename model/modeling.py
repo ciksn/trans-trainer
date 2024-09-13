@@ -58,34 +58,64 @@ class MAIN(PreTrainedModel):
     def _prepare_model_inputs(self, inputs: torch.Tensor | None = None, bos_token_id: int | None = None, model_kwargs: torch.Dict[str, torch.Tensor] | None = None) -> Tuple[Tensor, str | None, Dict[str, Tensor]]:
         return super()._prepare_model_inputs(inputs, bos_token_id, model_kwargs)
 
-    def _prepare_inputs_with_pixel(
+    def _prepare_inputs_with_pixel_for_training(
             self, 
             visual_hidden_states: torch.Tensor, 
             input_ids: torch.Tensor, 
             attention_mask:torch.Tensor
         ):
 
-        gt = input_ids.masked_fill(attention_mask == self.config.pad_token_id, -100)
+        gt = input_ids.masked_fill(attention_mask == self.config.pad_token_id, -100)[:,1:]
         actual_input_ids = input_ids[:,:-1]
 
         batch, T, _ = visual_hidden_states.size()
         batch, K = actual_input_ids.size()
         total_number = T + K
 
-        mask = torch.ones((total_number, total_number),device=visual_hidden_states.device)
-        casual_mask = torch.tril(torch.ones((K, K),device=visual_hidden_states.device))
-        zero_mask = torch.zeros((T,K),device=visual_hidden_states.device)
-        mask[T:,T:] = casual_mask
-        mask[:T,T:] = zero_mask
-        mask = mask.expand((batch,1,-1,-1))
+        # mask = torch.ones((total_number, total_number),device=visual_hidden_states.device)
+        # casual_mask = torch.tril(torch.ones((K, K),device=visual_hidden_states.device))
+        # zero_mask = torch.zeros((T,K),device=visual_hidden_states.device)
+        # mask[T:,T:] = casual_mask
+        # mask[:T,T:] = zero_mask
+        # mask = mask.expand((batch,1,-1,-1))
 
+        # mask = mask.masked_fill(mask == 0, float('-inf'))
+        # mask = mask.masked_fill(mask == 1, 0)
+        
+        mask = torch.tril(torch.ones((total_number, total_number),device=visual_hidden_states.device))
         mask = mask.masked_fill(mask == 0, float('-inf'))
         mask = mask.masked_fill(mask == 1, 0)
+        mask = mask.expand((batch, 1, -1, -1))
 
         word_embeddings = self.language_model.model.embed_tokens(actual_input_ids)
         input_embeds = torch.cat([visual_hidden_states, word_embeddings],dim=1)
 
         return (input_embeds, mask, gt)
+    
+    def _prepare_inputs_with_pixel_for_generation(
+            self, 
+            visual_hidden_states: torch.Tensor, 
+            input_ids: torch.Tensor, 
+        ):
+
+        actual_input_ids = input_ids
+
+        batch, T, _ = visual_hidden_states.size()
+        batch, K = actual_input_ids.size()
+        total_number = T + K
+
+        # mask = torch.ones((total_number, total_number),device=visual_hidden_states.device)
+        # casual_mask = torch.tril(torch.ones((K, K),device=visual_hidden_states.device))
+        # zero_mask = torch.zeros((T,K),device=visual_hidden_states.device)
+        # mask[T:,T:] = casual_mask
+        # mask[:T,T:] = zero_mask
+        # mask = mask.expand((batch,1,-1,-1))
+        mask = torch.ones((batch, total_number),device=visual_hidden_states.device)
+
+        word_embeddings = self.language_model.model.embed_tokens(actual_input_ids)
+        input_embeds = torch.cat([visual_hidden_states, word_embeddings],dim=1)
+
+        return (input_embeds, mask)
 
     def forward(self,pixel_values, attention_mask, labels):
         """
@@ -106,7 +136,7 @@ class MAIN(PreTrainedModel):
                 encoder_hidden_states = hidden_states,
             )[0]
         
-            inputs_embeds, attention_mask, gt = self._prepare_inputs_with_pixel(hidden_states,labels['caption'],attention_mask)
+            inputs_embeds, attention_mask, gt = self._prepare_inputs_with_pixel_for_training(hidden_states,labels['caption'],attention_mask)
 
         logits = self.language_model(
             inputs_embeds=inputs_embeds,
@@ -117,7 +147,7 @@ class MAIN(PreTrainedModel):
         loss = None
         if labels is not None:
             shift_logits = logits[..., :, :].contiguous()
-            shift_gt = gt[..., 1:].contiguous()
+            shift_gt = gt[..., :].contiguous()
             shift_logits = shift_logits.view(-1, self.config.language_model_config.vocab_size)
             shift_gt = shift_gt.view(-1)
 
@@ -158,9 +188,10 @@ class MAIN(PreTrainedModel):
         input_ids = torch.full(
             (pixel_values.size(0), 1), self.config.bos_token_id, dtype=torch.long, device=pixel_values.device
         )
-        
+
         # 准备语言模型的输入嵌入
-        inputs_embeds, attention_mask, _ = self._prepare_inputs_with_pixel(hidden_states, input_ids, attention_mask)
+        inputs_embeds, attention_mask = self._prepare_inputs_with_pixel_for_generation(hidden_states, input_ids)
+        position_ids = torch.arange(0,inputs_embeds.size(1),dtype=torch.long,device=inputs_embeds.device).expand(inputs_embeds.size(0),-1)
 
         # 使用语言模型自带的 `generate` 方法
         generated_ids = self.language_model.generate(

@@ -50,7 +50,7 @@ def main(config):
         gt_list += tokenizer.batch_decode(caption,skip_special_tokens=True)
 
         args = {
-            'max_length': 30,
+            'max_new_tokens': 30,
             'num_beams': 5,
             'temperature': 0.7,
             'top_k': 50,

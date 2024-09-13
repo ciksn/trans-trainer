@@ -26,11 +26,12 @@ def build_tokenizer(model_args):
 def build_config(model_args):
     config = MAINconfig(
         64,
-        2,
-        None,
-        None,
-        None,
-        None,
+        bos_token_id=1,
+        pad_token_id=2,
+        visual_backbone_config=None,
+        visual_abstractor_config=None,
+        multi_task_config=None,
+        language_model_config=None,
     )
     config.visual_backbone_config = CLIPConfig.from_pretrained(model_args.visual_backbone)
     config.language_model_config = LlamaConfig.from_pretrained(model_args.language_model)

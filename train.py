@@ -230,7 +230,7 @@ def train():
     if model_args.need_tokenizer:
         tokenizer = transformers.AutoTokenizer.from_pretrained(
             model_args.tokenizer_name_or_path,
-            cache_dir=training_args.cache_dir,
+            # cache_dir=training_args.cache_dir,
             model_max_length=data_args.caption_seq_len,
             padding_side="right",
             # use_fast=False,

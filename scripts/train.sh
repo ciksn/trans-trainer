@@ -46,7 +46,7 @@ python ../train.py \
     --logging_steps 1 \
     --logging_strategy "steps" \
     --lr_scheduler_type "cosine" \
-    --num_train_epochs 5 \
+    --num_train_epochs 15 \
     --output_dir ../checkpoints/checkpoint \
     --report_to tensorboard \
     --resume_from_checkpoint None \

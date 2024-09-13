@@ -29,7 +29,7 @@ class custom_model(PreTrainedModel):
         super(custom_model,self).__init__(config, *inputs, **kwargs)
         self.config = config
         self.tokenizer = tokenizer
-        self.loss = nn.CrossEntropyLoss(ignore_index=self.tokenizer.bos_token_id,label_smoothing=config.label_smoothing)
+        self.loss = nn.CrossEntropyLoss(ignore_index=self.tokenizer.pad_token_id,label_smoothing=config.label_smoothing)
         self.SceneLevel = SceneLevel(config)
         self.ObjectLevel = ObjectLevel(config)
         self.MotionLevel = MotionLevel(config)
@@ -48,8 +48,7 @@ class custom_model(PreTrainedModel):
         total_number = T+K
 
         mask = torch.ones((total_number, total_number))
-        casual_mask = torch.tril(torch.ones((K,K)))
-        mask[:K,T:] = casual_mask
+        mask = torch.tril(torch.ones((total_number, total_number)))
 
         mask = mask.masked_fill(mask == 0, float('-inf'))
         mask = mask.masked_fill(mask == 1, 0)
@@ -84,7 +83,7 @@ class custom_model(PreTrainedModel):
             self.get_media_mask(T,reason_T).to(actual_visual_input.device),
             None)
         
-        hypert = 0.1
+        hypert = 0.5
         #TODO Trick: consider label smoothing here
         loss = None
         if labels is not None:

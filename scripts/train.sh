@@ -53,7 +53,7 @@ python ../train.py \
     --save_strategy "epoch" \
     --save_steps 30 \
     --save_total_limit 1 \
-    --metric_for_best_model "action/CIDEr" \
+    --metric_for_best_model "reason/CIDEr" \
     --seed 42 \
     --gradient_accumulation_steps 8 \
     --per_device_train_batch_size 16 \

@@ -140,22 +140,22 @@ class MAIN(PreTrainedModel):
         if pixel_values is not None:
             query_token_embeds = self.query_tokens.expand((pixel_values.size(0),-1,-1))
 
-            hidden_states = self.visual_backbone(pixel_values)[0]
+            visual_hidden_states = self.visual_backbone(pixel_values)[0]
 
-            multi_task_output = self.multi_task(hidden_states,labels)
+            abstractor_hidden_states = self.visual_abstractor(
+                query_embeds = query_token_embeds,
+                encoder_hidden_states = visual_hidden_states
+            )
+            
+            multi_task_output = self.multi_task(torch.cat([visual_hidden_states,abstractor_hidden_states[0]],dim=1),labels)
             loss_obj, logits_bbox = multi_task_output[0], multi_task_output[1]
 
-            hidden_states = self.visual_abstractor(
-                query_embeds = query_token_embeds,
-                encoder_hidden_states = hidden_states,
-            )[0]
-        
-            inputs_embeds, attention_mask, gt = self._prepare_inputs_with_pixel_for_training(hidden_states,labels['caption'],attention_mask)
+            inputs_embeds, attention_mask, gt = self._prepare_inputs_with_pixel_for_training(abstractor_hidden_states[1],labels['caption'],attention_mask)
 
         logits_caption = self.language_model(
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask
-        )[0][:,hidden_states.size(1):]
+        )[0][:,abstractor_hidden_states[1].size(1):]
 
         if labels is not None:
             logits_caption = logits_caption[..., :, :].contiguous()
@@ -195,15 +195,15 @@ class MAIN(PreTrainedModel):
         """
         # 提取视觉特征
         query_token_embeds = self.query_tokens.expand((pixel_values.size(0), -1, -1))
-        hidden_states = self.visual_backbone(pixel_values)[0]
+        visual_hidden_states = self.visual_backbone(pixel_values)[0]
 
-        multi_task_output = self.multi_task(hidden_states,None)
-        loss_obj, logits_bbox = multi_task_output[0], multi_task_output[1]
-
-        hidden_states = self.visual_abstractor(
+        abstractor_hidden_states = self.visual_abstractor(
             query_embeds=query_token_embeds,
-            encoder_hidden_states=hidden_states,
-        )[0]
+            encoder_hidden_states=visual_hidden_states,
+        )
+
+        multi_task_output = self.multi_task(torch.cat([visual_hidden_states,abstractor_hidden_states[0]],dim=1),None)
+        loss_obj, logits_bbox = multi_task_output[0], multi_task_output[1]
 
         # 初始化生成的 input_ids 序列
         input_ids = torch.full(
@@ -211,7 +211,7 @@ class MAIN(PreTrainedModel):
         )
 
         # 准备语言模型的输入嵌入
-        inputs_embeds, attention_mask = self._prepare_inputs_with_pixel_for_generation(hidden_states, input_ids)
+        inputs_embeds, attention_mask = self._prepare_inputs_with_pixel_for_generation(abstractor_hidden_states[1], input_ids)
         position_ids = torch.arange(0,inputs_embeds.size(1),dtype=torch.long,device=inputs_embeds.device).expand(inputs_embeds.size(0),-1)
 
         # 使用语言模型自带的 `generate` 方法

@@ -1,4 +1,5 @@
 import torch
+import numpy
 
 def get_iou(pred, bbox):
     """
@@ -7,6 +8,10 @@ def get_iou(pred, bbox):
     :param bbox: (batch_size, 4), each box is in the format [x_min, y_min, x_max, y_max]
     :return: IoU for each pair in the batch (batch_size,)
     """
+    if isinstance(pred,numpy.ndarray):
+        pred = torch.from_numpy(pred)
+    if isinstance(bbox,numpy.ndarray):
+        bbox = torch.from_numpy(bbox)
     # Get the coordinates of the intersection rectangle
     x1_inter = torch.max(pred[:, 0], bbox[:, 0])
     y1_inter = torch.max(pred[:, 1], bbox[:, 1])
@@ -25,4 +30,4 @@ def get_iou(pred, bbox):
 
     # Compute IoU
     iou = inter_area / union_area
-    return iou.mean().float()
+    return iou.mean()

@@ -53,7 +53,7 @@ class multireference_text_with_obj_metric:
         gt_captions = self.tokenizer.batch_decode(gt_captions,skip_special_tokens=True)
         output = text_only_language_eval(pred,gt_captions)
 
-        output['Mean-IOU'] = get_iou(logits['bbox'],gt_bbox)
+        output['Mean-IOU'] = float(get_iou(logits['bbox'],gt_bbox))
 
         json.dump(pred,open("../checkpoints/outputs/eval.json",mode='w'))
 

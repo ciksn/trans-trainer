@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import math
 from typing import Tuple,Optional
-from transformers.modeling_outputs import BaseModelOutput,BaseModelOutputWithPooling
+from transformers.modeling_outputs import BaseModelOutput,BaseModelOutputWithPooling,ModelOutput
 from transformers import PreTrainedModel
 from transformers.pytorch_utils import find_pruneable_heads_and_indices, prune_linear_layer
 from .configuration_model import MAINAbstractorConfig
@@ -443,11 +443,12 @@ class MAINVisualAbstractorModel(PreTrainedModel):
         sequence_output = encoder_outputs[0]
         pooled_output = sequence_output[:, 0, :]
 
-        sequence_output = self.visual_fc(sequence_output)
-        sequence_output = torch.cat([sequence_output, self.vit_eos.repeat(sequence_output.shape[0], 1, 1)], dim=1)
+        language_model_hidden_states = self.visual_fc(sequence_output)
+        language_model_hidden_states = torch.cat([language_model_hidden_states, self.vit_eos.repeat(language_model_hidden_states.shape[0], 1, 1)], dim=1)
 
-        return BaseModelOutputWithPooling(
+        return ModelOutput(
             last_hidden_state=sequence_output,
+            language_model_hidden_states=language_model_hidden_states,
             pooler_output=pooled_output,
             hidden_states=encoder_outputs.hidden_states,
         )

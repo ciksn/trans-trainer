@@ -29,7 +29,7 @@ from dataset.datasets import DATASET_REGISTRY, COLLATE_REGISTRY
 from model.modeling import MAIN
 from model.build import build_model,build_config,build_tokenizer
 from model.configuration_model import MAINconfig
-from eval.compute_metric import multireference_text_metric
+from eval.compute_metric import multireference_text_metric,multireference_text_with_obj_metric
 from constants import IGNORE_INDEX
 
 from icecream import ic
@@ -304,7 +304,7 @@ def train():
 
     data_module = build_data_module(data_args,tokenizer)
 
-    compute_metric = multireference_text_metric(tokenizer)
+    compute_metric = multireference_text_with_obj_metric(tokenizer)
     trainer = custom_trainer(model=model,
                     tokenizer=tokenizer,
                     args=training_args,

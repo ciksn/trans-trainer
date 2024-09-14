@@ -42,6 +42,8 @@ class drama_dataset(Dataset):
         for input_file in input_files:
             self.dataset += load_jsonl(input_file+"/"+split+".jsonl")
 
+        # self.dataset = self.dataset[:int(len(self.dataset)*0.05)]
+        
     def __getitem__(self, index) -> Any:
         data = self.dataset[index]
         image = data['img']

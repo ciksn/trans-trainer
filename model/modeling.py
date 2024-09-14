@@ -17,6 +17,7 @@ from transformers.pipelines import AutoTokenizer,AutoConfig,AutoModel
 
 from model.configuration_model import MAINconfig
 from model.modeling_abstractor import MAINVisualAbstractorModel
+from model.modeling_multitask import MAINMultiTaskModelForALL
 
 from icecream import ic
 
@@ -47,13 +48,16 @@ class MAIN(PreTrainedModel):
         self.language_model = LlamaForCausalLM(config.language_model_config)
 
         #TODO 1
-        self.multi_task = None
+        self.multi_task = MAINMultiTaskModelForALL(config.multi_task_config)
 
         self.loss = nn.CrossEntropyLoss()
 
         self.query_tokens = nn.Parameter(
             torch.zeros(1, config.num_query_tokens, config.visual_abstractor_config.hidden_size)
         )
+
+        # self.sigma_1 = nn.Parameter(torch.rand(1)[0])
+        # self.sigma_2 = nn.Parameter(torch.rand(1)[0])
         
     def _prepare_model_inputs(self, inputs: torch.Tensor | None = None, bos_token_id: int | None = None, model_kwargs: torch.Dict[str, torch.Tensor] | None = None) -> Tuple[Tensor, str | None, Dict[str, Tensor]]:
         return super()._prepare_model_inputs(inputs, bos_token_id, model_kwargs)
@@ -65,7 +69,8 @@ class MAIN(PreTrainedModel):
             attention_mask:torch.Tensor
         ):
 
-        gt = input_ids.masked_fill(attention_mask == self.config.pad_token_id, -100)[:,1:]
+        # gt = input_ids.masked_fill(attention_mask == 0, -100)[:,1:]
+        gt = input_ids[:,1:]
         actual_input_ids = input_ids[:,:-1]
 
         batch, T, _ = visual_hidden_states.size()
@@ -116,6 +121,13 @@ class MAIN(PreTrainedModel):
         input_embeds = torch.cat([visual_hidden_states, word_embeddings],dim=1)
 
         return (input_embeds, mask)
+    
+    def _get_loss(self, loss_caption, loss_obj):
+        # final_loss = 1 / (2 * torch.square(self.sigma_1)) * loss_caption + \
+        # 1 / (2 * torch.square(self.sigma_2)) * loss_obj + torch.log(self.sigma_1 * self.sigma_2)
+        lam = 0.5
+        final_loss = loss_caption * lam + loss_obj * (1 - lam)
+        return final_loss
 
     def forward(self,pixel_values, attention_mask, labels):
         """
@@ -129,7 +141,9 @@ class MAIN(PreTrainedModel):
             query_token_embeds = self.query_tokens.expand((pixel_values.size(0),-1,-1))
 
             hidden_states = self.visual_backbone(pixel_values)[0]
-        # multi_task_loss = self.multi_task(hidden_states)
+
+            multi_task_output = self.multi_task(hidden_states,labels)
+            loss_obj, logits_bbox = multi_task_output[0], multi_task_output[1]
 
             hidden_states = self.visual_abstractor(
                 query_embeds = query_token_embeds,
@@ -138,28 +152,31 @@ class MAIN(PreTrainedModel):
         
             inputs_embeds, attention_mask, gt = self._prepare_inputs_with_pixel_for_training(hidden_states,labels['caption'],attention_mask)
 
-        logits = self.language_model(
+        logits_caption = self.language_model(
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask
         )[0][:,hidden_states.size(1):]
 
-        #TODO Trick: consider label smoothing here
-        loss = None
         if labels is not None:
-            shift_logits = logits[..., :, :].contiguous()
+            logits_caption = logits_caption[..., :, :].contiguous()
             shift_gt = gt[..., :].contiguous()
-            shift_logits = shift_logits.view(-1, self.config.language_model_config.vocab_size)
-            shift_gt = shift_gt.view(-1)
+            logits_caption_flat = logits_caption.view(-1, self.config.language_model_config.vocab_size)
+            shift_gt_flat = shift_gt.view(-1)
 
-            shift_labels = shift_gt.to(shift_logits.device)
-            loss = self.loss.forward(shift_logits, shift_labels)
+            shift_gt_flat = shift_gt_flat.to(logits_caption.device)
+            loss_caption = self.loss.forward(logits_caption_flat, shift_gt_flat)
+
+        loss = self._get_loss(loss_caption,loss_obj)
 
         # ic(loss.item())
         #when computing loss, remember to distinct single batch when training or batch of list when eval
 
         return CausalLMOutput(
             loss = loss,
-            logits = logits
+            logits = {
+                'bbox': logits_bbox,
+                'caption': logits_caption
+            }
         )
     
     @torch.no_grad()
@@ -179,11 +196,15 @@ class MAIN(PreTrainedModel):
         # 提取视觉特征
         query_token_embeds = self.query_tokens.expand((pixel_values.size(0), -1, -1))
         hidden_states = self.visual_backbone(pixel_values)[0]
+
+        multi_task_output = self.multi_task(hidden_states,None)
+        loss_obj, logits_bbox = multi_task_output[0], multi_task_output[1]
+
         hidden_states = self.visual_abstractor(
             query_embeds=query_token_embeds,
             encoder_hidden_states=hidden_states,
         )[0]
-        
+
         # 初始化生成的 input_ids 序列
         input_ids = torch.full(
             (pixel_values.size(0), 1), self.config.bos_token_id, dtype=torch.long, device=pixel_values.device
@@ -200,7 +221,10 @@ class MAIN(PreTrainedModel):
             **generate_kwargs  # 额外参数传递给生成函数，比如 num_beams, do_sample
         )
 
-        return generated_ids
+        return ModelOutput(
+            generated_ids = generated_ids,
+            logits_bbox = logits_bbox,
+        )
     
     def freeze_language(self,):
         for param in self.language_model.parameters():
@@ -215,14 +239,4 @@ AutoConfig.register("MAIN",MAINconfig)
 AutoModel.register(MAINconfig,MAIN)
 
 if __name__ == "__main__":
-    device = "cuda:0"
-    # Test code here -> to be REMOVED
-    tokenizer = AutoTokenizer.from_pretrained("/home/zeyu/.cache/huggingface/hub/models--bert-base-uncased/snapshots/86b5e0934494bd15c9632b12f734a8a67f723594")
-    custom_model_config_b = custom_model_config.from_pretrained("/home/zeyu/work/deep_learning/functional_files/trans_trainer/test/config.json")
-    model = custom_model(custom_model_config_b, tokenizer).to(device)
-    input_2d = torch.ones((1,32,768)).float().to(device)
-    input_3d = torch.ones((1,32,1024)).float().to(device)
-    input_object = torch.ones((1,32,2048)).float().to(device)
-    labels = ["a man is eating","a woman is eating"]
-
-    output = model.forward(input_2d,input_3d,input_object,labels)
+    pass

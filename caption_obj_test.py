@@ -71,7 +71,7 @@ def main(config):
         pred_bbox = pred_outputs[1] if pred_bbox is None else torch.cat([pred_bbox, pred_outputs[1]],dim=0)
 
     _ = text_only_language_eval(pred_list,gt_list)
-    mean_iou = get_iou(pred_bbox.to(config.device), gt_bbox.to(config.device))
+    mean_iou = float(get_iou(pred_bbox.to(config.device), gt_bbox.to(config.device)))
     print("Mean-IOU:", mean_iou)
 
     json_list = []

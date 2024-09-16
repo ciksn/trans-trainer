@@ -147,7 +147,8 @@ class MAIN(PreTrainedModel):
                 encoder_hidden_states = visual_hidden_states
             )
             
-            multi_task_output = self.multi_task(torch.cat([visual_hidden_states,abstractor_hidden_states[0]],dim=1),labels)
+            # multi_task_output = self.multi_task(torch.cat([visual_hidden_states,abstractor_hidden_states[0]],dim=1),labels)
+            multi_task_output = self.multi_task(visual_hidden_states, labels)
             loss_obj, logits_bbox = multi_task_output[0], multi_task_output[1]
 
             inputs_embeds, attention_mask, gt = self._prepare_inputs_with_pixel_for_training(abstractor_hidden_states[1],labels['caption'],attention_mask)
@@ -202,7 +203,8 @@ class MAIN(PreTrainedModel):
             encoder_hidden_states=visual_hidden_states,
         )
 
-        multi_task_output = self.multi_task(torch.cat([visual_hidden_states,abstractor_hidden_states[0]],dim=1),None)
+        # multi_task_output = self.multi_task(torch.cat([visual_hidden_states,abstractor_hidden_states[0]],dim=1),None)
+        multi_task_output = self.multi_task(visual_hidden_states, None)
         loss_obj, logits_bbox = multi_task_output[0], multi_task_output[1]
 
         # 初始化生成的 input_ids 序列

@@ -322,6 +322,7 @@ class MAINMultiTaskModelForObjectDetection(MAINMultiTaskModelBase):
         super().__init__(config)
         
         self.detection_head = nn.Linear(config.hidden_size,config.detection_size)
+        self.pre_norm = nn.LayerNorm(config.hidden_size,config.layer_norm_eps)
         self.loss = giou_loss(eps=1e-7,reduction='mean')
 
     def forward(
@@ -330,6 +331,7 @@ class MAINMultiTaskModelForObjectDetection(MAINMultiTaskModelBase):
         labels = None
     ):
         pooled_hidden_states = super().forward(hidden_states)[1]
+        pooled_hidden_states = self.pre_norm(pooled_hidden_states)
         detection_output = self.detection_head(pooled_hidden_states)
         
         loss = None

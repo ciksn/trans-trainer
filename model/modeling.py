@@ -69,8 +69,9 @@ class MAIN(PreTrainedModel):
             attention_mask:torch.Tensor
         ):
 
-        # gt = input_ids.masked_fill(attention_mask == 0, -100)[:,1:]
         gt = input_ids[:,1:]
+        gt = gt.masked_fill(attention_mask[:,1:] == 0, -100)
+        
         actual_input_ids = input_ids[:,:-1]
 
         batch, T, _ = visual_hidden_states.size()

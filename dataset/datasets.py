@@ -14,7 +14,8 @@ from tqdm import tqdm
 
 from dataset.common import load_video, load_image
 from dataset.preprocess.process_drama import drama_annotation_process
-from dataset.processor.ImageCaption_processor import ImageCaptionProcessor
+from dataset.processor.ImageCaption_processor import (
+    ImageCaptionProcessorWithoutCrop, ImageCaptionProcessor)
 
 def load_jsonl(filename):
     with open(filename, "r", encoding="utf-8") as f:
@@ -34,7 +35,10 @@ class drama_dataset(Dataset):
     def __init__(self, data_args, split:str) -> None:
         super().__init__()
         self.split = split
-        self.processor = ImageCaptionProcessor()
+        if split == "train":
+            self.processor = ImageCaptionProcessor()
+        else:
+            self.processor = ImageCaptionProcessorWithoutCrop()
 
         self.dataset = []
         if isinstance(data_args.dataset_input_files, str):
@@ -86,6 +90,11 @@ class drama_dataset_collate_fn(object): # <name>_dataset_collate_fn
 
         input_ids = tokenized['input_ids']
         attention_mask = tokenized['attention_mask']
+
+        B, T = attention_mask.size()
+        for index in range(len(instances)):
+            if instances[index]['labels']['caption'] == "":
+                attention_mask[index] = torch.zeros((T),dtype=torch.int)
 
         return {
             'pixel_values': pixel_value,

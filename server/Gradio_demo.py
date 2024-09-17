@@ -88,7 +88,7 @@ if __name__ == "__main__":
     parser.add_argument('--device', type=str, default="cuda:0")
     config = parser.parse_args()
 
-    tokenizer = AutoTokenizer.from_pretrained("TinyLlama/TinyLlama_v1.1", add_eos_token=True)
+    tokenizer = AutoTokenizer.from_pretrained(config.checkpoint, add_eos_token=True)
     tokenizer.pad_token = tokenizer.eos_token
 
     modelconfig = MAINconfig.from_pretrained(config.checkpoint)

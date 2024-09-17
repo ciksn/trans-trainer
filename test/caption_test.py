@@ -31,7 +31,7 @@ def build_test_data_module(data_args,tokenzier:PreTrainedTokenizer = None) -> Di
 # TODO 
 # Multi-GPU Support 
 def main(config):
-    tokenizer = AutoTokenizer.from_pretrained("TinyLlama/TinyLlama_v1.1",add_eos_token=True)
+    tokenizer = AutoTokenizer.from_pretrained(config.checkpoint,add_eos_token=True)
     tokenizer.pad_token = tokenizer.eos_token
     model_config = MAINconfig.from_pretrained(config.checkpoint)
     model = MAIN.from_pretrained(pretrained_model_name_or_path=config.checkpoint,config=model_config)

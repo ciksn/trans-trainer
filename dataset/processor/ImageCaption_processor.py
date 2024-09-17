@@ -81,8 +81,6 @@ class ImageCaptionProcessorWithoutCrop:
         self.text_transform = None
 
     def __call__(self, image, text) -> tuple[torch.Tensor, Any]:
-        assert image is None or text is None
-        
         if image is not None:
             image_input = self.image_transform(image)
         else:

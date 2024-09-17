@@ -1,6 +1,7 @@
 import torch
 import numpy
 from torchvision import transforms
+from typing import List, Any
 from PIL import Image
 import random
 
@@ -30,7 +31,7 @@ class ImageCaptionProcessor:
             ])
         self.text_transform = None
 
-    def __call__(self, image, text):
+    def __call__(self, image, text) -> tuple[torch.Tensor, Any]:
         assert image or text
         
         if image:
@@ -79,15 +80,15 @@ class ImageCaptionProcessorWithoutCrop:
             ])
         self.text_transform = None
 
-    def __call__(self, image, text):
-        assert image or text
+    def __call__(self, image, text) -> tuple[torch.Tensor, Any]:
+        assert image is None or text is None
         
-        if image:
+        if image is not None:
             image_input = self.image_transform(image)
         else:
             image_input = None
 
-        if text and not isinstance(text, str):
+        if text is not None and not isinstance(text, str):
             if isinstance(text["prompt"], list):
                 prompt = random.choice(text["prompt"])
             else:

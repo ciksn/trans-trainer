@@ -3,7 +3,7 @@ import decord
 from PIL import Image
 from torchvision import transforms
 from decord import VideoReader, cpu
-decord.bridge.set_bridge("torch")
+
 
 def get_index(num_frames, num_segments):
     seg_size = float(num_frames - 1) / num_segments
@@ -17,6 +17,7 @@ def get_index(num_frames, num_segments):
 def load_video(video_path, num_segments=8, 
                return_msg=False, resolution=224, 
                hd_num=4, padding=False):
+    decord.bridge.set_bridge("torch")
     vr = VideoReader(video_path, ctx=cpu(0), num_threads=1)
     num_frames = len(vr)
     frame_indices = get_index(num_frames, num_segments)

@@ -1,11 +1,12 @@
+import PIL.ImageDraw
 import cv2
 import torch
 import os
+import PIL
+from PIL import Image
 
-def draw_bbox(imgs_path: str, bbox: torch.Tensor):
+def draw_bbox_to_file(imgs_path: str, bbox: torch.Tensor):
     """
-    Only support single image input
-
     Args: 
         img_path: List[str | os.pathlike]
         bbox: torch.Tensor -> (B,4)
@@ -19,3 +20,11 @@ def draw_bbox(imgs_path: str, bbox: torch.Tensor):
         x1,y1,x2,y2 = round(float(bbox[index,0])), round(float(bbox[index,1])), round(float(bbox[index,2])), round(float(bbox[index,3]))
         img = cv2.rectangle(img,(x1,y1,),(x2,y2),(0,0,255),2)
         cv2.imwrite(target_path, img,)
+
+def draw_bbox_to_image(img: Image.Image, bbox: torch.Tensor):
+    draw = PIL.ImageDraw.Draw(img)
+
+    x1,y1,x2,y2 = round(float(bbox[0])), round(float(bbox[1])), round(float(bbox[2])), round(float(bbox[3]))
+    draw.rectangle([(x1, y1),(x2, y2)],outline="red")
+
+    return img

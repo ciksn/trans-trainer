@@ -1,6 +1,37 @@
 import torch
 import torch.nn as nn
 
+class iou_loss(nn.Module):
+    def __init__(self,eps=1e-7, reduction='mean') -> None:
+        super().__init__()
+        self.eps=eps
+        self.reduction=reduction
+    
+    def forward(self, preds, bbox):
+        x1 = torch.max(preds[:, 0], bbox[:, 0])
+        y1 = torch.max(preds[:, 1], bbox[:, 1])
+        x2 = torch.min(preds[:, 2], bbox[:, 2])
+        y2 = torch.min(preds[:, 3], bbox[:, 3])
+
+        w = (x2 - x1 + 1.0).clamp(0.)
+        h = (y2 - y1 + 1.0).clamp(0.)
+
+        inters = w * h
+
+        uni = (preds[:, 2] - preds[:, 0] + 1.0) * (preds[:, 3] - preds[:, 1] + 1.0) + (bbox[:, 2] - bbox[:, 0] + 1.0) * (
+                bbox[:, 3] - bbox[:, 1] + 1.0) - inters
+
+        ious = (inters / uni).clamp(min=self.eps)
+        loss = -ious.log()
+
+        if self.reduction == 'mean':
+            loss = torch.mean(loss)
+        elif self.reduction == 'sum':
+            loss = torch.sum(loss)
+        else:
+            raise NotImplementedError
+        return loss
+
 class giou_loss(nn.Module):
     def __init__(self,eps=1e-7, reduction='mean') -> None:
         super().__init__()
@@ -8,6 +39,15 @@ class giou_loss(nn.Module):
         self.reduction=reduction
     
     def forward(self, preds, bbox):
+        actual_pred = []
+        actual_bbox = []
+        ignore_tensor = torch.ones((4),dtype=torch.float,device='cpu')
+        for index in range(bbox.size(0)):
+            if not torch.equal(ignore_tensor, bbox[index].cpu()):
+                actual_pred.append(preds[index].unsqueeze(0))
+                actual_bbox.append(bbox[index].unsqueeze(0))
+        preds = torch.cat(actual_pred,dim=0)
+        bbox = torch.cat(actual_bbox,dim=1)
         ix1 = torch.max(preds[:, 0], bbox[:, 0])
         iy1 = torch.max(preds[:, 1], bbox[:, 1])
         ix2 = torch.min(preds[:, 2], bbox[:, 2])

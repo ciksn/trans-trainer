@@ -6,7 +6,7 @@ from transformers import PreTrainedModel, PretrainedConfig
 from transformers.modeling_outputs import BaseModelOutput,BaseModelOutputWithPooling,ModelOutput
 from transformers.pytorch_utils import find_pruneable_heads_and_indices, prune_linear_layer
 from .configuration_model import MAINMultiTaskConfig
-from model.loss import giou_loss
+from model.loss import giou_loss, iou_loss
 
 class MAINMultiTaskMLP(nn.Module):
     def __init__(self, config: MAINMultiTaskConfig) -> None:
@@ -323,7 +323,8 @@ class MAINMultiTaskModelForObjectDetection(MAINMultiTaskModelBase):
         
         self.detection_head = nn.Linear(config.hidden_size,config.detection_size)
         self.pre_norm = nn.LayerNorm(config.hidden_size,config.layer_norm_eps)
-        self.loss = giou_loss(eps=1e-7,reduction='mean')
+        # self.loss = giou_loss(eps=1e-7,reduction='mean')
+        self.loss = iou_loss(eps=1e-7,reduction='mean')
 
     def forward(
         self,

@@ -70,7 +70,7 @@ class MAIN(PreTrainedModel):
         ):
 
         gt = input_ids[:,1:]
-        gt = gt.masked_fill(attention_mask[:,1:] == 0, -100)
+        # gt = gt.masked_fill(attention_mask[:,1:] == 0, -100)
         
         actual_input_ids = input_ids[:,:-1]
 

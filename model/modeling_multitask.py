@@ -200,7 +200,7 @@ class MAINMultiTaskLayer(nn.Module):
 
         self.layer_idx = layer_idx
 
-        self.crossattention = MAINMultiTaskAttention(config)
+        self.selfattention = MAINMultiTaskAttention(config)
         self.has_cross_attention = True
 
     def forward(
@@ -214,7 +214,7 @@ class MAINMultiTaskLayer(nn.Module):
     ):
         if encoder_hidden_states is None:
             raise ValueError("encoder_hidden_states must be given for cross-attention layers")
-        cross_attention_outputs = self.crossattention(
+        self_attention_outputs = self.selfattention(
             hidden_states,
             attention_mask,
             head_mask,
@@ -222,9 +222,9 @@ class MAINMultiTaskLayer(nn.Module):
             encoder_attention_mask,
             output_attentions=output_attentions,
         )
-        query_attention_output = cross_attention_outputs[0]
+        self_attention_output = self_attention_outputs[0]
 
-        outputs = (query_attention_output,)
+        outputs = (self_attention_output,)
         return outputs
 
 class MAINMultiTaskEncoder(nn.Module):
@@ -301,15 +301,10 @@ class MAINMultiTaskModelBase(PreTrainedModel):
         self.config = config
         self.encoder = MAINMultiTaskEncoder(config)
 
-        self.query_tokens = nn.Parameter(
-            torch.zeros((1, config.num_query_tokens, config.hidden_size))
-        )
-
     def forward(self, hidden_states):
-        input_query = self.query_tokens.expand((hidden_states.size(0),-1,-1))
         outputs = self.encoder(
             hidden_states=hidden_states,
-            encoder_hidden_states=input_query
+            encoder_hidden_states=hidden_states,
         )[0]
         return BaseModelOutputWithPooling(
             last_hidden_state=outputs,
@@ -324,6 +319,8 @@ class MAINMultiTaskModelForObjectDetection(MAINMultiTaskModelBase):
         self.detection_head = nn.Linear(config.hidden_size,config.detection_size)
         self.pre_norm = nn.LayerNorm(config.hidden_size,config.layer_norm_eps)
         # self.loss = giou_loss(eps=1e-7,reduction='mean')
+        
+        # we choose iou_loss here, do not modify
         self.loss = iou_loss(eps=1e-7,reduction='mean')
 
     def forward(

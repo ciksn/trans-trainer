@@ -35,10 +35,10 @@ class drama_dataset(Dataset):
     def __init__(self, data_args, split:str) -> None:
         super().__init__()
         self.split = split
-        if split == "train":
-            self.processor = ImageCaptionProcessor()
-        else:
-            self.processor = ImageCaptionProcessorWithoutCrop()
+        # if split == "train":
+        #     self.processor = ImageCaptionProcessor()
+        # else:
+        self.processor = ImageCaptionProcessorWithoutCrop()
 
         self.dataset = []
         if isinstance(data_args.dataset_input_files, str):

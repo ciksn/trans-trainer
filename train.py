@@ -30,7 +30,6 @@ from model.modeling import MAIN
 from model.build import build_model,build_config,build_tokenizer
 from model.configuration_model import MAINconfig
 from eval.compute_metric import multireference_text_metric,multireference_text_with_obj_metric
-from constants import IGNORE_INDEX
 
 from icecream import ic
 
@@ -227,7 +226,7 @@ def train():
             cache_dir=model_args.cache_dir)
     else:
         config = build_config(model_args)
-        # config.save_pretrained(model_args.config_name_or_path)
+        # config.save_pretrained(model_args.config_name_or_path+"/baseline")
 
     if model_args.need_tokenizer and model_args.tokenizer_from_pretrained:
         tokenizer = transformers.AutoTokenizer.from_pretrained(
@@ -249,7 +248,7 @@ def train():
         )
     else:
         model = build_model(model_args, config)
-        # model.save_pretrained(model_args.model_name_or_path)
+        # model.save_pretrained(model_args.model_name_or_path+"/baseline")
 
     #TODO if the model need to freeze parameters
     # Please list here

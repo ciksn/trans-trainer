@@ -52,6 +52,10 @@ class model_wrapper():
 
         # 文字转语音
         engine = pyttsx3.init()
+        engine.setProperty('rate', 150)
+        voices = engine.getProperty('voices')
+        engine.setProperty('voice', voices[1].id)
+
         engine.say(text)
         engine.save_to_file(text, 'test.mp3')
         engine.runAndWait()
@@ -75,6 +79,10 @@ class model_wrapper():
 
         # 输出结果赋给变量text
         engine = pyttsx3.init()
+        engine.setProperty('rate', 150)
+        voices = engine.getProperty('voices')
+        engine.setProperty('voice', voices[1].id)
+        
         engine.say(text)
         engine.save_to_file(text, 'test.mp3')
         audio, sr = librosa.load(path="test.mp3")
